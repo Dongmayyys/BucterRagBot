@@ -1,7 +1,6 @@
 import { embed } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { vectorSearch, VectorSearchResult } from '@/lib/supabase';
-import { Citation } from '@/lib/types';
 
 /**
  * API Route: /api/chat
