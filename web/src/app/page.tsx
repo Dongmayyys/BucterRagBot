@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react';
 import { ChatLayout } from '@/components/chat/chat-layout';
 import { ChatList } from '@/components/chat/chat-list';
 import { ChatInput } from '@/components/chat/chat-input';
-import { ChatMessage } from '@/lib/types';
+import { ChatMessage, Citation } from '@/lib/types';
 
 /**
  * 主页面 - 聊天界面
@@ -12,8 +12,12 @@ import { ChatMessage } from '@/lib/types';
  * 数据流：
  * 1. 用户输入 → ChatInput → sendMessage()
  * 2. sendMessage() → fetch('/api/chat') → 流式响应
- * 3. 流式响应 → setMessages() → ChatList 渲染
+ * 3. 解析响应：先提取 citations，再渲染 LLM 文本
+ * 4. setMessages() → ChatList → MessageBubble → SourceBubble
  */
+
+// 分隔符常量
+const STREAM_SEPARATOR = '---STREAM_START---';
 
 export default function ChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -66,20 +70,44 @@ export default function ChatPage() {
       if (!reader) throw new Error('No response body');
 
       const decoder = new TextDecoder();
-      let fullContent = '';
+      let buffer = '';           // 累积缓冲区
+      let citations: Citation[] = [];  // 解析出的 citations
+      let streamStarted = false; // 是否已经开始接收 LLM 文本
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        fullContent += decoder.decode(value, { stream: true });
+        buffer += decoder.decode(value, { stream: true });
 
-        // 6. 更新 assistant 消息
-        setMessages(prev =>
-          prev.map(msg =>
-            msg.id === assistantId ? { ...msg, content: fullContent } : msg
-          )
-        );
+        // 6. 检测分隔符，提取 citations
+        if (!streamStarted && buffer.includes(STREAM_SEPARATOR)) {
+          const [jsonPart, rest] = buffer.split(STREAM_SEPARATOR);
+
+          // 解析 citations JSON
+          try {
+            const parsed = JSON.parse(jsonPart.trim());
+            citations = parsed.citations || [];
+            console.log('[Frontend] Parsed citations:', citations.length);
+          } catch (e) {
+            console.error('[Frontend] Failed to parse citations:', e);
+          }
+
+          // 重置 buffer 为分隔符后的内容
+          buffer = rest?.trim() || '';
+          streamStarted = true;
+        }
+
+        // 7. 更新 assistant 消息（仅在流开始后）
+        if (streamStarted) {
+          setMessages(prev =>
+            prev.map(msg =>
+              msg.id === assistantId
+                ? { ...msg, content: buffer, citations }
+                : msg
+            )
+          );
+        }
       }
     } catch (err) {
       console.error('Chat error:', err);

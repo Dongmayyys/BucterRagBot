@@ -1,6 +1,7 @@
 import { embed } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { vectorSearch, VectorSearchResult } from '@/lib/supabase';
+import { Citation } from '@/lib/types';
 
 /**
  * API Route: /api/chat
@@ -60,6 +61,7 @@ export async function POST(request: Request) {
         const searchResults = await vectorSearch(queryEmbedding, {
             matchCount: 20,
             matchThreshold: 0.3,
+            // 数据库应只保留最优切分策略，无需 filter
         });
         console.log('[API] Search results count:', searchResults.length);
 
@@ -68,10 +70,21 @@ export async function POST(request: Request) {
         const rankedResults = await rerank(query, searchResults, 5);
         console.log('[API] Reranked results count:', rankedResults.length);
 
-        // 4. 构建 Context
+        // 4. 构建 Context（带编号，供 LLM 使用）
         const context = rankedResults
             .map((r, i) => `[${i + 1}] ${r.content}`)
             .join('\n\n');
+
+        // 5. 构建 Citations（供前端展示）
+        const citations: Citation[] = rankedResults.map((r) => ({
+            id: r.id,
+            fileName: r.metadata?.source || '未知来源',
+            page: r.metadata?.page,
+            // content: r.content.slice(0, 150) + '...',
+            content: r.content,  // 不截断
+            rerank_score: r.rerank_score,
+        }));
+        console.log('[API] Citations count:', citations.length);
 
         // 5. 构建 System Prompt
         const systemPrompt = `你是一个专业的校园问答助手，负责回答学生关于学校规章制度、服务设施等问题。
@@ -129,6 +142,10 @@ ${context || '暂无参考资料'}
                     controller.close();
                     return;
                 }
+
+                // ★ 先发送 citations JSON + 分隔符
+                const citationsLine = JSON.stringify({ citations }) + '\n---STREAM_START---\n';
+                controller.enqueue(encoder.encode(citationsLine));
 
                 const decoder = new TextDecoder();
                 let buffer = '';
