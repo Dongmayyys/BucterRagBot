@@ -29,9 +29,9 @@ export function ChatLayout({ children }: ChatLayoutProps) {
             </aside>
 
             {/* 主内容区 */}
-            <main className="flex-1 flex flex-col min-w-0">
+            <main className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
                 {/* 顶部栏 (手机端显示菜单按钮) */}
-                <header className="flex items-center justify-between px-4 h-14 border-b border-border bg-background/80 backdrop-blur-sm md:hidden">
+                <header className="flex items-center justify-between px-4 h-14 border-b border-border bg-background/80 backdrop-blur-sm md:hidden shrink-0">
                     {/* 手机端菜单按钮 */}
                     <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
                         <SheetTrigger asChild>
@@ -51,8 +51,10 @@ export function ChatLayout({ children }: ChatLayoutProps) {
                     <div className="w-10" />
                 </header>
 
-                {/* 聊天内容区 */}
-                {children}
+                {/* 聊天内容区 - 占满剩余空间 */}
+                <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                    {children}
+                </div>
             </main>
         </div>
     );

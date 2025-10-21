@@ -24,7 +24,6 @@ interface ChatListProps {
 }
 
 export function ChatList({ messages, isLoading, onSuggestionClick }: ChatListProps) {
-    const scrollRef = useRef<HTMLDivElement>(null);
     const bottomRef = useRef<HTMLDivElement>(null);
 
     // 消息更新时自动滚动到底部
@@ -35,7 +34,7 @@ export function ChatList({ messages, isLoading, onSuggestionClick }: ChatListPro
     // 空状态：展示欢迎语和建议卡片
     if (messages.length === 0 && !isLoading) {
         return (
-            <div className="flex-1 flex flex-col items-center justify-center px-4 py-12">
+            <div className="flex-1 flex flex-col items-center justify-center px-4 py-12 overflow-auto">
                 {/* 欢迎标题 */}
                 <div className="text-center mb-8">
                     <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-purple-600 shadow-lg mb-4">
@@ -64,7 +63,7 @@ export function ChatList({ messages, isLoading, onSuggestionClick }: ChatListPro
     }
 
     return (
-        <ScrollArea className="flex-1 px-4" ref={scrollRef}>
+        <ScrollArea className="flex-1 px-4 h-full">
             <div className="max-w-3xl mx-auto py-6 space-y-6">
                 {/* 渲染所有消息 */}
                 {messages.map((message, idx) => (

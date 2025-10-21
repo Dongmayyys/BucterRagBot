@@ -111,7 +111,7 @@ export function ChatInput({
 
                 {/* 提示文字 */}
                 <p className="text-[10px] text-muted-foreground text-center mt-2">
-                    按 Enter 发送，Shift + Enter 换行
+                    内容仅供参考，请注意时效性并核实来源
                 </p>
             </div>
         </form>
