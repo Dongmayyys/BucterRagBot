@@ -2,7 +2,6 @@
 
 import { useRef, useEffect } from 'react';
 import { Sparkles } from 'lucide-react';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChatMessage, SuggestionCard, DEFAULT_SUGGESTIONS } from '@/lib/types';
 import { MessageBubble } from './message-bubble';
@@ -63,7 +62,7 @@ export function ChatList({ messages, isLoading, onSuggestionClick }: ChatListPro
     }
 
     return (
-        <ScrollArea className="flex-1 px-4 h-full">
+        <div className="flex-1 overflow-y-auto px-4 custom-scrollbar">
             <div className="max-w-3xl mx-auto py-6 space-y-6">
                 {/* 渲染所有消息 */}
                 {messages.map((message, idx) => (
@@ -82,7 +81,7 @@ export function ChatList({ messages, isLoading, onSuggestionClick }: ChatListPro
                 {/* 滚动锚点 */}
                 <div ref={bottomRef} />
             </div>
-        </ScrollArea>
+        </div>
     );
 }
 
