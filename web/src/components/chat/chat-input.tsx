@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, FormEvent, KeyboardEvent } from 'react';
-import { Send, Loader2 } from 'lucide-react';
+import { Send, Loader2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -13,17 +13,22 @@ import { cn } from '@/lib/utils';
  * - Enter 发送，Shift+Enter 换行
  * - 发送按钮禁用状态
  * - 加载中显示 spinner
+ * - 清除按钮（有消息时显示）
  */
 
 interface ChatInputProps {
     onSubmit: (message: string) => void;
+    onClear?: () => void;
     isLoading?: boolean;
+    showClearButton?: boolean;
     placeholder?: string;
 }
 
 export function ChatInput({
     onSubmit,
+    onClear,
     isLoading = false,
+    showClearButton = false,
     placeholder = '输入你的问题...',
 }: ChatInputProps) {
     const [input, setInput] = useState('');
@@ -64,7 +69,7 @@ export function ChatInput({
     return (
         <form
             onSubmit={handleSubmit}
-            className="border-t border-border bg-background/80 backdrop-blur-sm"
+            className="shrink-0 border-t border-border bg-background/80 backdrop-blur-sm"
         >
             <div className="max-w-3xl mx-auto p-4">
                 <div
@@ -73,6 +78,21 @@ export function ChatInput({
                         'focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20'
                     )}
                 >
+                    {/* 清除按钮 */}
+                    {showClearButton && (
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={onClear}
+                            disabled={isLoading}
+                            className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive"
+                            title="清除对话"
+                        >
+                            <Trash2 className="h-4 w-4" />
+                        </Button>
+                    )}
+
                     {/* 文本输入框 */}
                     <textarea
                         ref={textareaRef}

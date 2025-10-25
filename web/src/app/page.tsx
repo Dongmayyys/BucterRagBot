@@ -14,6 +14,7 @@ import { ChatMessage, Citation } from '@/lib/types';
  * 2. sendMessage() → fetch('/api/chat') → 流式响应
  * 3. 解析响应：先提取 citations，再渲染 LLM 文本
  * 4. setMessages() → ChatList → MessageBubble → SourceBubble
+ * 5. 点击引用 → setSelectedCitation → SourcePanel 显示详情
  */
 
 // 分隔符常量
@@ -23,6 +24,7 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedCitation, setSelectedCitation] = useState<Citation | null>(null);
 
   /**
    * 核心发送逻辑
@@ -119,13 +121,33 @@ export default function ChatPage() {
     }
   }, [isLoading, messages]);
 
+  /**
+   * 清除对话历史
+   */
+  const handleClear = useCallback(() => {
+    setMessages([]);
+    setSelectedCitation(null);
+    setError(null);
+  }, []);
+
+  /**
+   * 点击引用来源
+   */
+  const handleCitationClick = useCallback((citation: Citation) => {
+    setSelectedCitation(citation);
+  }, []);
+
   return (
-    <ChatLayout>
+    <ChatLayout
+      selectedCitation={selectedCitation}
+      onCloseCitation={() => setSelectedCitation(null)}
+    >
       {/* 消息列表 */}
       <ChatList
         messages={messages}
         isLoading={isLoading}
         onSuggestionClick={sendMessage}
+        onCitationClick={handleCitationClick}
       />
 
       {/* 错误提示 */}
@@ -136,7 +158,12 @@ export default function ChatPage() {
       )}
 
       {/* 输入框组件 */}
-      <ChatInput onSubmit={sendMessage} isLoading={isLoading} />
+      <ChatInput
+        onSubmit={sendMessage}
+        onClear={handleClear}
+        isLoading={isLoading}
+        showClearButton={messages.length > 0}
+      />
     </ChatLayout>
   );
 }

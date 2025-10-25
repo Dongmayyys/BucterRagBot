@@ -3,7 +3,7 @@
 import { useRef, useEffect } from 'react';
 import { Sparkles } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ChatMessage, SuggestionCard, DEFAULT_SUGGESTIONS } from '@/lib/types';
+import { ChatMessage, Citation, SuggestionCard, DEFAULT_SUGGESTIONS } from '@/lib/types';
 import { MessageBubble } from './message-bubble';
 
 /**
@@ -20,9 +20,10 @@ interface ChatListProps {
     messages: ChatMessage[];
     isLoading?: boolean;
     onSuggestionClick?: (query: string) => void;
+    onCitationClick?: (citation: Citation) => void;
 }
 
-export function ChatList({ messages, isLoading, onSuggestionClick }: ChatListProps) {
+export function ChatList({ messages, isLoading, onSuggestionClick, onCitationClick }: ChatListProps) {
     const bottomRef = useRef<HTMLDivElement>(null);
 
     // 消息更新时自动滚动到底部
@@ -70,6 +71,7 @@ export function ChatList({ messages, isLoading, onSuggestionClick }: ChatListPro
                         key={message.id || idx}
                         message={message}
                         isStreaming={isLoading && idx === messages.length - 1 && message.role === 'assistant'}
+                        onCitationClick={onCitationClick}
                     />
                 ))}
 

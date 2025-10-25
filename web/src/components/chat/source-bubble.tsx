@@ -8,29 +8,33 @@ import { Citation } from '@/lib/types';
  * 
  * 这是区分普通聊天机器人和 RAG 系统的关键组件
  * 当 AI 回答时，展示答案所依据的文档来源，增强可信度
+ * 
+ * 点击卡片可以查看原文详情（PC 右侧面板 / 手机底部弹窗）
  */
 
 interface SourceBubbleProps {
     citations: Citation[];
+    onCitationClick?: (citation: Citation) => void;
 }
 
-export function SourceBubble({ citations }: SourceBubbleProps) {
+export function SourceBubble({ citations, onCitationClick }: SourceBubbleProps) {
     if (!citations || citations.length === 0) return null;
 
     return (
         <div className="flex gap-2 mt-3 flex-wrap">
             {citations.map((citation, idx) => (
-                <div
+                <button
                     key={citation.id || idx}
+                    onClick={() => onCitationClick?.(citation)}
                     className="group flex items-center gap-1.5 text-xs 
                      bg-muted/50 hover:bg-muted 
                      p-2 px-3 rounded-lg border border-border/50
                      cursor-pointer transition-all duration-200
-                     hover:shadow-sm hover:border-border"
-                    title={citation.content}
+                     hover:shadow-sm hover:border-primary/50"
+                    title="点击查看原文"
                 >
                     {/* 文件图标 */}
-                    <FileText className="w-3.5 h-3.5 text-muted-foreground group-hover:text-foreground transition-colors" />
+                    <FileText className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
 
                     {/* 文件名 (截断显示) */}
                     <span className="font-medium truncate max-w-[120px] text-foreground/80 group-hover:text-foreground">
@@ -50,7 +54,7 @@ export function SourceBubble({ citations }: SourceBubbleProps) {
                             {(citation.rerank_score * 100).toFixed(0)}%
                         </span>
                     )}
-                </div>
+                </button>
             ))}
         </div>
     );

@@ -4,7 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { User, Bot } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { ChatMessage } from '@/lib/types';
+import { ChatMessage, Citation } from '@/lib/types';
 import { SourceBubble } from './source-bubble';
 
 /**
@@ -18,9 +18,10 @@ import { SourceBubble } from './source-bubble';
 interface MessageBubbleProps {
     message: ChatMessage;
     isStreaming?: boolean;  // 是否正在流式输出
+    onCitationClick?: (citation: Citation) => void;
 }
 
-export function MessageBubble({ message, isStreaming }: MessageBubbleProps) {
+export function MessageBubble({ message, isStreaming, onCitationClick }: MessageBubbleProps) {
     const isUser = message.role === 'user';
 
     return (
@@ -99,7 +100,7 @@ export function MessageBubble({ message, isStreaming }: MessageBubbleProps) {
 
                 {/* 引用来源卡片 (仅 AI 消息) */}
                 {!isUser && message.citations && message.citations.length > 0 && (
-                    <SourceBubble citations={message.citations} />
+                    <SourceBubble citations={message.citations} onCitationClick={onCitationClick} />
                 )}
             </div>
 

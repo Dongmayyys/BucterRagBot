@@ -1,117 +1,135 @@
 'use client';
 
-import { Menu, X, MessageSquare, Settings, PlusCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Github, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { useState } from 'react';
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { Citation } from '@/lib/types';
 
 /**
- * 聊天布局组件
+ * 聊天布局组件 - 简化版
  * 
- * 响应式设计：
- * - PC 端：左侧固定 Sidebar + 右侧主聊天窗口
- * - 手机端：Sidebar 通过 Sheet 弹出
+ * 结构：
+ * - 顶部栏：GitHub + 标题 + 主题切换
+ * - 中部：聊天窗口 + 溯源面板（PC 右侧 / 手机弹窗）
+ * - 底部：输入框
  */
 
 interface ChatLayoutProps {
     children: React.ReactNode;
+    selectedCitation: Citation | null;
+    onCloseCitation: () => void;
 }
 
-export function ChatLayout({ children }: ChatLayoutProps) {
-    const [sidebarOpen, setSidebarOpen] = useState(false);
+export function ChatLayout({ children, selectedCitation, onCloseCitation }: ChatLayoutProps) {
+    // 检测是否为移动端（< 768px）
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const checkMobile = () => setIsMobile(window.innerWidth < 768);
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
 
     return (
-        <div className="flex h-screen bg-background">
-            {/* PC 端侧边栏 (md 以上显示) */}
-            <aside className="hidden md:flex md:w-64 lg:w-72 flex-col border-r border-border bg-muted/30">
-                <SidebarContent />
-            </aside>
+        <div className="flex flex-col h-screen bg-background">
+            {/* 顶部栏 */}
+            <header className="shrink-0 flex items-center justify-between px-4 h-14 border-b border-border bg-background/80 backdrop-blur-sm">
+                {/* 左侧：GitHub 链接 */}
+                <a
+                    href="https://github.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-2 rounded-lg hover:bg-muted transition-colors"
+                    title="查看源码"
+                >
+                    <Github className="h-5 w-5" />
+                </a>
+
+                {/* 中间：标题 */}
+                <h1 className="font-semibold text-lg">校园智能问答</h1>
+
+                {/* 右侧：主题切换（预留） */}
+                <Button variant="ghost" size="icon" disabled title="主题切换（开发中）">
+                    <Sun className="h-5 w-5" />
+                </Button>
+            </header>
 
             {/* 主内容区 */}
-            <main className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-                {/* 顶部栏 (手机端显示菜单按钮) */}
-                <header className="flex items-center justify-between px-4 h-14 border-b border-border bg-background/80 backdrop-blur-sm md:hidden shrink-0">
-                    {/* 手机端菜单按钮 */}
-                    <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-                        <SheetTrigger asChild>
-                            <Button variant="ghost" size="icon" className="md:hidden">
-                                <Menu className="h-5 w-5" />
-                            </Button>
-                        </SheetTrigger>
-                        <SheetContent side="left" className="w-72 p-0">
-                            <SidebarContent onClose={() => setSidebarOpen(false)} />
-                        </SheetContent>
-                    </Sheet>
-
-                    {/* 标题 */}
-                    <h1 className="font-semibold text-lg">校园问答</h1>
-
-                    {/* 占位 */}
-                    <div className="w-10" />
-                </header>
-
-                {/* 聊天内容区 - 占满剩余空间 */}
-                <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+            <div className="flex-1 flex min-h-0 overflow-hidden">
+                {/* 左侧：聊天区域 */}
+                <main className="flex-1 flex flex-col min-w-0">
                     {children}
-                </div>
-            </main>
+                </main>
+
+                {/* 右侧：溯源面板 - 仅 PC 端显示 */}
+                <aside className="hidden md:block w-80 border-l border-border bg-muted/30 overflow-hidden">
+                    <SourcePanelContent citation={selectedCitation} />
+                </aside>
+            </div>
+
+            {/* 手机端：溯源弹窗（仅移动端打开） */}
+            <Sheet open={isMobile && !!selectedCitation} onOpenChange={(open) => !open && onCloseCitation()}>
+                <SheetContent side="bottom" className="h-[70vh]">
+                    <SheetTitle className="sr-only">原文详情</SheetTitle>
+                    <SheetDescription className="sr-only">查看引用来源的原文内容</SheetDescription>
+                    <SourcePanelContent citation={selectedCitation} />
+                </SheetContent>
+            </Sheet>
         </div>
     );
 }
 
 /**
- * 侧边栏内容
+ * 溯源面板内容
  */
-function SidebarContent({ onClose }: { onClose?: () => void }) {
+function SourcePanelContent({ citation }: { citation: Citation | null }) {
+    if (!citation) {
+        return (
+            <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-6">
+                <div className="text-4xl mb-4">📄</div>
+                <p className="text-center text-sm">
+                    点击消息中的引用来源，<br />查看原文详情
+                </p>
+            </div>
+        );
+    }
+
     return (
         <div className="flex flex-col h-full">
-            {/* Logo 区域 */}
-            <div className="flex items-center justify-between px-4 h-14 border-b border-border">
-                <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
-                        <MessageSquare className="w-4 h-4 text-white" />
-                    </div>
-                    <span className="font-semibold">Campus AI</span>
+            {/* 面板标题 */}
+            <div className="shrink-0 px-4 py-3 border-b border-border">
+                <h3 className="font-medium text-sm">原文详情</h3>
+            </div>
+
+            {/* 元信息 */}
+            <div className="shrink-0 px-4 py-3 border-b border-border bg-muted/50 space-y-2">
+                <div className="flex items-center gap-2 text-sm">
+                    <span className="text-muted-foreground">来源：</span>
+                    <span className="font-medium">{citation.fileName}</span>
                 </div>
-                {onClose && (
-                    <Button variant="ghost" size="icon" onClick={onClose} className="md:hidden">
-                        <X className="h-5 w-5" />
-                    </Button>
+                {citation.page && (
+                    <div className="flex items-center gap-2 text-sm">
+                        <span className="text-muted-foreground">页码：</span>
+                        <span>第 {citation.page} 页</span>
+                    </div>
+                )}
+                {citation.rerank_score && (
+                    <div className="flex items-center gap-2 text-sm">
+                        <span className="text-muted-foreground">相关度：</span>
+                        <span className="text-primary font-medium">
+                            {(citation.rerank_score * 100).toFixed(0)}%
+                        </span>
+                    </div>
                 )}
             </div>
 
-            {/* 新对话按钮 */}
-            <div className="p-3">
-                <Button
-                    variant="outline"
-                    className="w-full justify-start gap-2"
-                    onClick={() => {
-                        // TODO: 实现新对话
-                        onClose?.();
-                    }}
-                >
-                    <PlusCircle className="h-4 w-4" />
-                    新对话
-                </Button>
-            </div>
-
-            {/* 历史记录区 (占位) */}
-            <ScrollArea className="flex-1 px-3">
-                <div className="space-y-1">
-                    <p className="text-xs text-muted-foreground px-2 py-4">
-                        暂无历史记录
-                    </p>
-                    {/* TODO: 渲染历史对话列表 */}
-                </div>
-            </ScrollArea>
-
-            {/* 底部设置区 */}
-            <div className="p-3 border-t border-border">
-                <Button variant="ghost" className="w-full justify-start gap-2 text-muted-foreground">
-                    <Settings className="h-4 w-4" />
-                    设置
-                </Button>
+            {/* 原文内容 */}
+            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                    {citation.content || '暂无原文内容'}
+                </p>
             </div>
         </div>
     );
