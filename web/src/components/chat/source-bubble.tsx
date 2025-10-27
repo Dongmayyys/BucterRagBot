@@ -21,7 +21,7 @@ export function SourceBubble({ citations, onCitationClick }: SourceBubbleProps) 
     if (!citations || citations.length === 0) return null;
 
     return (
-        <div className="flex gap-2 mt-3 flex-wrap">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-3">
             {citations.map((citation, idx) => (
                 <button
                     key={citation.id || idx}
@@ -30,27 +30,28 @@ export function SourceBubble({ citations, onCitationClick }: SourceBubbleProps) 
                      bg-muted/50 hover:bg-muted 
                      p-2 px-3 rounded-lg border border-border/50
                      cursor-pointer transition-all duration-200
-                     hover:shadow-sm hover:border-primary/50"
-                    title="点击查看原文"
+                     hover:shadow-sm hover:border-primary/50
+                     w-full"
+                    title={citation.fileName}
                 >
                     {/* 文件图标 */}
-                    <FileText className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
+                    <FileText className="w-3.5 h-3.5 shrink-0 text-muted-foreground group-hover:text-primary transition-colors" />
 
                     {/* 文件名 (截断显示) */}
-                    <span className="font-medium truncate max-w-[120px] text-foreground/80 group-hover:text-foreground">
+                    <span className="font-medium truncate flex-1 text-left text-foreground/80 group-hover:text-foreground">
                         {citation.fileName}
                     </span>
 
                     {/* 页码 (如果有) */}
                     {citation.page && (
-                        <span className="text-muted-foreground">
+                        <span className="text-muted-foreground shrink-0">
                             P{citation.page}
                         </span>
                     )}
 
                     {/* 相似度分数 (可选展示) */}
                     {citation.rerank_score && (
-                        <span className="text-muted-foreground/60 text-[10px]">
+                        <span className="text-muted-foreground/60 text-[10px] shrink-0">
                             {(citation.rerank_score * 100).toFixed(0)}%
                         </span>
                     )}

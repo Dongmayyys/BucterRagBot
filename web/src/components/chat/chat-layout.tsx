@@ -33,40 +33,40 @@ export function ChatLayout({ children, selectedCitation, onCloseCitation }: Chat
     }, []);
 
     return (
-        <div className="flex flex-col h-screen bg-background">
-            {/* 顶部栏 */}
-            <header className="shrink-0 flex items-center justify-between px-4 h-14 border-b border-border bg-background/80 backdrop-blur-sm">
-                {/* 左侧：GitHub 链接 */}
-                <a
-                    href="https://github.com"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="p-2 rounded-lg hover:bg-muted transition-colors"
-                    title="查看源码"
-                >
-                    <Github className="h-5 w-5" />
-                </a>
+        <div className="flex h-screen bg-background">
+            {/* 右侧：溯源面板 - 全高显示，仅 PC 端 */}
+            <aside className="hidden md:flex md:flex-col w-80 border-r border-border bg-muted/30 overflow-hidden order-last">
+                <SourcePanelContent citation={selectedCitation} />
+            </aside>
 
-                {/* 中间：标题 */}
-                <h1 className="font-semibold text-lg">校园智能问答</h1>
+            {/* 左侧主区域 */}
+            <div className="flex-1 flex flex-col min-w-0">
+                {/* 顶部栏 */}
+                <header className="shrink-0 flex items-center justify-between px-4 h-14 border-b border-border bg-background/80 backdrop-blur-sm">
+                    {/* 左侧：GitHub 链接 */}
+                    <a
+                        href="https://github.com"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-2 rounded-lg hover:bg-muted transition-colors"
+                        title="查看源码"
+                    >
+                        <Github className="h-5 w-5" />
+                    </a>
 
-                {/* 右侧：主题切换（预留） */}
-                <Button variant="ghost" size="icon" disabled title="主题切换（开发中）">
-                    <Sun className="h-5 w-5" />
-                </Button>
-            </header>
+                    {/* 中间：标题 */}
+                    <h1 className="font-semibold text-lg">校园智能问答</h1>
 
-            {/* 主内容区 */}
-            <div className="flex-1 flex min-h-0 overflow-hidden">
-                {/* 左侧：聊天区域 */}
-                <main className="flex-1 flex flex-col min-w-0">
+                    {/* 右侧：主题切换（预留） */}
+                    <Button variant="ghost" size="icon" disabled title="主题切换（开发中）">
+                        <Sun className="h-5 w-5" />
+                    </Button>
+                </header>
+
+                {/* 聊天区域 */}
+                <main className="flex-1 flex flex-col min-h-0 overflow-hidden">
                     {children}
                 </main>
-
-                {/* 右侧：溯源面板 - 仅 PC 端显示 */}
-                <aside className="hidden md:block w-80 border-l border-border bg-muted/30 overflow-hidden">
-                    <SourcePanelContent citation={selectedCitation} />
-                </aside>
             </div>
 
             {/* 手机端：溯源弹窗（仅移动端打开） */}
@@ -98,9 +98,9 @@ function SourcePanelContent({ citation }: { citation: Citation | null }) {
 
     return (
         <div className="flex flex-col h-full">
-            {/* 面板标题 */}
-            <div className="shrink-0 px-4 py-3 border-b border-border">
-                <h3 className="font-medium text-sm">原文详情</h3>
+            {/* 面板标题 - 与顶部栏同高 */}
+            <div className="shrink-0 px-4 h-14 flex items-center border-b border-border">
+                <h3 className="font-medium">原文详情</h3>
             </div>
 
             {/* 元信息 */}

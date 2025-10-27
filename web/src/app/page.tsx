@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { ChatLayout } from '@/components/chat/chat-layout';
 import { ChatList } from '@/components/chat/chat-list';
 import { ChatInput } from '@/components/chat/chat-input';
@@ -15,6 +15,7 @@ import { ChatMessage, Citation } from '@/lib/types';
  * 3. 解析响应：先提取 citations，再渲染 LLM 文本
  * 4. setMessages() → ChatList → MessageBubble → SourceBubble
  * 5. 点击引用 → setSelectedCitation → SourcePanel 显示详情
+ * 6. 点击停止 → abortController.abort() → 终止流式输出
  */
 
 // 分隔符常量
@@ -26,6 +27,9 @@ export default function ChatPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedCitation, setSelectedCitation] = useState<Citation | null>(null);
 
+  // 用于终止请求的 AbortController
+  const abortControllerRef = useRef<AbortController | null>(null);
+
   /**
    * 核心发送逻辑
    * @param content 消息内容
@@ -35,6 +39,9 @@ export default function ChatPage() {
 
     setError(null);
     setIsLoading(true);
+
+    // 创建新的 AbortController
+    abortControllerRef.current = new AbortController();
 
     // 1. 添加用户消息
     const userMessage: ChatMessage = {
@@ -56,11 +63,12 @@ export default function ChatPage() {
         parts: [{ type: 'text', text: msg.content }],
       }));
 
-      // 4. 发送请求
+      // 4. 发送请求（带 signal 用于终止）
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: uiMessages }),
+        signal: abortControllerRef.current.signal,
       });
 
       if (!response.ok) {
@@ -112,14 +120,31 @@ export default function ChatPage() {
         }
       }
     } catch (err) {
+      // 检查是否是用户主动取消
+      if (err instanceof Error && err.name === 'AbortError') {
+        console.log('[Frontend] Request aborted by user');
+        // 不移除消息，保留已生成的内容
+        return;
+      }
+
       console.error('Chat error:', err);
       setError(err instanceof Error ? err.message : 'Unknown error');
       // 移除空的 assistant 消息
       setMessages(prev => prev.filter(msg => msg.id !== assistantId));
     } finally {
       setIsLoading(false);
+      abortControllerRef.current = null;
     }
   }, [isLoading, messages]);
+
+  /**
+   * 停止生成
+   */
+  const handleStop = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+  }, []);
 
   /**
    * 清除对话历史
@@ -161,6 +186,7 @@ export default function ChatPage() {
       <ChatInput
         onSubmit={sendMessage}
         onClear={handleClear}
+        onStop={handleStop}
         isLoading={isLoading}
         showClearButton={messages.length > 0}
       />
