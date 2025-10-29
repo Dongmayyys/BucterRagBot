@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Github, Sun } from 'lucide-react';
+import { Github, Sun, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Citation } from '@/lib/types';
@@ -19,9 +19,11 @@ interface ChatLayoutProps {
     children: React.ReactNode;
     selectedCitation: Citation | null;
     onCloseCitation: () => void;
+    onNewChat?: () => void;
+    hasMessages?: boolean;
 }
 
-export function ChatLayout({ children, selectedCitation, onCloseCitation }: ChatLayoutProps) {
+export function ChatLayout({ children, selectedCitation, onCloseCitation, onNewChat, hasMessages = false }: ChatLayoutProps) {
     // 检测是否为移动端（< 768px）
     const [isMobile, setIsMobile] = useState(false);
 
@@ -43,24 +45,36 @@ export function ChatLayout({ children, selectedCitation, onCloseCitation }: Chat
             <div className="flex-1 flex flex-col min-w-0">
                 {/* 顶部栏 */}
                 <header className="shrink-0 flex items-center justify-between px-4 h-14 border-b border-border bg-background/80 backdrop-blur-sm">
-                    {/* 左侧：GitHub 链接 */}
-                    <a
-                        href="https://github.com"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-2 rounded-lg hover:bg-muted transition-colors"
-                        title="查看源码"
+                    {/* 左侧：新对话按钮 */}
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={onNewChat}
+                        disabled={!hasMessages}
+                        className="gap-1.5"
                     >
-                        <Github className="h-5 w-5" />
-                    </a>
+                        <Plus className="h-4 w-4" />
+                        <span>新对话</span>
+                    </Button>
 
                     {/* 中间：标题 */}
-                    <h1 className="font-semibold text-lg">校园智能问答</h1>
+                    <h1 className="font-semibold text-lg absolute left-1/2 -translate-x-1/2">校园智能问答</h1>
 
-                    {/* 右侧：主题切换（预留） */}
-                    <Button variant="ghost" size="icon" disabled title="主题切换（开发中）">
-                        <Sun className="h-5 w-5" />
-                    </Button>
+                    {/* 右侧：GitHub + 主题切换 */}
+                    <div className="flex items-center gap-1">
+                        <a
+                            href="https://github.com"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-2 rounded-lg hover:bg-muted transition-colors"
+                            title="查看源码"
+                        >
+                            <Github className="h-5 w-5" />
+                        </a>
+                        <Button variant="ghost" size="icon" disabled title="主题切换（开发中）">
+                            <Sun className="h-5 w-5" />
+                        </Button>
+                    </div>
                 </header>
 
                 {/* 聊天区域 */}

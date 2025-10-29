@@ -147,12 +147,17 @@ export default function ChatPage() {
   }, []);
 
   /**
-   * 清除对话历史
+   * 清除对话历史（同时终止 LLM 输出）
    */
   const handleClear = useCallback(() => {
+    // 先终止正在进行的请求
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
     setMessages([]);
     setSelectedCitation(null);
     setError(null);
+    setIsLoading(false);
   }, []);
 
   /**
@@ -166,6 +171,8 @@ export default function ChatPage() {
     <ChatLayout
       selectedCitation={selectedCitation}
       onCloseCitation={() => setSelectedCitation(null)}
+      onNewChat={handleClear}
+      hasMessages={messages.length > 0}
     >
       {/* 消息列表 */}
       <ChatList
@@ -185,10 +192,8 @@ export default function ChatPage() {
       {/* 输入框组件 */}
       <ChatInput
         onSubmit={sendMessage}
-        onClear={handleClear}
         onStop={handleStop}
         isLoading={isLoading}
-        showClearButton={messages.length > 0}
       />
     </ChatLayout>
   );
