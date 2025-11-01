@@ -96,6 +96,10 @@ class QARegexStrategy(ChunkStrategy):
         """按 Q&A 边界切分"""
         parts = re.split(self.pattern, text)
         chunks = []
+        chunk_index = 0
+        
+        # 从文件名提取 document_id（去掉 .pdf 后缀）
+        document_id = filename.replace('.pdf', '')
         
         # 前言/目录部分
         if parts[0].strip():
@@ -104,9 +108,12 @@ class QARegexStrategy(ChunkStrategy):
                 metadata={
                     "source": filename, 
                     "type": "intro", 
-                    "strategy": self.name
+                    "strategy": self.name,
+                    "document_id": document_id,
+                    "chunk_index": chunk_index
                 }
             ))
+            chunk_index += 1
         
         # 问答对
         for i in range(1, len(parts), 2):
@@ -123,9 +130,12 @@ class QARegexStrategy(ChunkStrategy):
                 metadata={
                     "source": filename,
                     "title": title,
-                    "strategy": self.name
+                    "strategy": self.name,
+                    "document_id": document_id,
+                    "chunk_index": chunk_index
                 }
             ))
+            chunk_index += 1
         
         return chunks
 

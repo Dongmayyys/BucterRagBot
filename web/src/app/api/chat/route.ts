@@ -1,6 +1,6 @@
 import { embed } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
-import { vectorSearch, VectorSearchResult } from '@/lib/supabase';
+import { vectorSearch, VectorSearchResult, getDocumentMeta } from '@/lib/supabase';
 import { Citation } from '@/lib/types';
 
 /**
@@ -76,14 +76,25 @@ export async function POST(request: Request) {
             .join('\n\n');
 
         // 5. 构建 Citations（供前端展示）
-        const citations: Citation[] = rankedResults.map((r) => ({
-            id: r.id,
-            fileName: r.metadata?.source || '未知来源',
-            page: r.metadata?.page,
-            // content: r.content.slice(0, 150) + '...',
-            content: r.content,  // 不截断
-            rerank_score: r.rerank_score,
-        }));
+        // 查询 source_documents 映射表获取额外信息
+        const citations: Citation[] = await Promise.all(
+            rankedResults.map(async (r) => {
+                const documentId = r.metadata?.document_id as string | undefined;
+                const docMeta = documentId ? await getDocumentMeta(documentId) : null;
+
+                return {
+                    id: r.id,
+                    fileName: r.metadata?.source || '未知来源',
+                    page: r.metadata?.page,
+                    content: r.content,
+                    rerank_score: r.rerank_score,
+                    // 新增字段
+                    documentId: documentId,
+                    chunkIndex: r.metadata?.chunk_index as number | undefined,
+                    downloadUrl: docMeta?.metadata?.download_url || undefined,
+                };
+            })
+        );
         console.log('[API] Citations count:', citations.length);
 
         // 5. 构建 System Prompt

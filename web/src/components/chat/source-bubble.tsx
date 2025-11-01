@@ -37,9 +37,9 @@ export function SourceBubble({ citations, onCitationClick }: SourceBubbleProps) 
                     {/* 文件图标 */}
                     <FileText className="w-3.5 h-3.5 shrink-0 text-muted-foreground group-hover:text-primary transition-colors" />
 
-                    {/* 文件名 (截断显示) */}
+                    {/* 文件名 (截断显示，去掉 .pdf 后缀) */}
                     <span className="font-medium truncate flex-1 text-left text-foreground/80 group-hover:text-foreground">
-                        {citation.fileName}
+                        {citation.fileName?.replace('.pdf', '') || citation.fileName}
                     </span>
 
                     {/* 页码 (如果有) */}

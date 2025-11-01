@@ -69,3 +69,39 @@ export async function vectorSearch(
 
     return data || [];
 }
+
+/**
+ * 文档元数据类型
+ */
+export interface DocumentMeta {
+    id: string;
+    metadata: {
+        download_url?: string;
+        [key: string]: unknown;
+    };
+}
+
+/**
+ * 获取文档元数据
+ * 从 source_documents 表查询（暂无缓存，便于观察日志）
+ */
+export async function getDocumentMeta(documentId: string): Promise<DocumentMeta | null> {
+    console.log(`[getDocumentMeta] 查询映射表: ${documentId}`);
+    const startTime = Date.now();
+
+    const { data, error } = await supabaseAdmin
+        .from('source_documents')
+        .select('id, metadata')
+        .eq('id', documentId)
+        .single();
+
+    const elapsed = Date.now() - startTime;
+    console.log(`[getDocumentMeta] 查询耗时: ${elapsed}ms`);
+
+    if (error) {
+        console.error('[getDocumentMeta] 查询失败:', error);
+        return null;
+    }
+
+    return data;
+}

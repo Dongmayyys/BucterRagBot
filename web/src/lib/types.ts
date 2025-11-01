@@ -9,11 +9,15 @@
  */
 export interface Citation {
     id: string;                // 文档块的唯一标识
-    fileName: string;          // 来源文件名 (如 "学生手册.pdf")
+    fileName: string;          // 来源文件名 (如 "2025-本科生学习指南.pdf")
     page?: number;             // 页码 (如果有)
     content?: string;          // 文档内容摘要
     similarity?: number;       // 向量相似度分数
     rerank_score?: number;     // Rerank 后的分数
+    // 新增字段
+    documentId?: string;       // 关联 source_documents.id
+    chunkIndex?: number;       // 在文档中的位置（用于上下块导航）
+    downloadUrl?: string;      // 下载链接
 }
 
 /**
