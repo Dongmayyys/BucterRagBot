@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Github, Sun, Plus } from 'lucide-react';
+import { Github, Sun, Plus, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Citation } from '@/lib/types';
@@ -99,6 +99,64 @@ export function ChatLayout({ children, selectedCitation, onCloseCitation, onNewC
  * 溯源面板内容
  */
 function SourcePanelContent({ citation }: { citation: Citation | null }) {
+    const [currentContent, setCurrentContent] = useState<string | null>(null);
+    const [currentIndex, setCurrentIndex] = useState<number | null>(null);
+    const [isLoading, setIsLoading] = useState(false);
+    const [hasPrev, setHasPrev] = useState(false);
+    const [hasNext, setHasNext] = useState(false);
+
+    // 当选中的 citation 变化时，重置状态
+    useEffect(() => {
+        if (citation) {
+            setCurrentContent(citation.content || null);
+            setCurrentIndex(citation.chunkIndex ?? null);
+            // 检查是否有上下块
+            checkAdjacent(citation.documentId, citation.chunkIndex);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [citation?.id]); // 故意只依赖 id，避免 citation 对象变化导致无限循环
+
+    // 检查是否有相邻块
+    const checkAdjacent = async (documentId?: string, chunkIndex?: number) => {
+        if (!documentId || chunkIndex === undefined) {
+            setHasPrev(false);
+            setHasNext(false);
+            return;
+        }
+        try {
+            const res = await fetch(`/api/chunks/adjacent?document_id=${encodeURIComponent(documentId)}&chunk_index=${chunkIndex}`);
+            const data = await res.json();
+            setHasPrev(!!data.prev);
+            setHasNext(!!data.next);
+        } catch {
+            setHasPrev(false);
+            setHasNext(false);
+        }
+    };
+
+    // 导航到相邻块
+    const navigateTo = async (direction: 'prev' | 'next') => {
+        if (!citation?.documentId || currentIndex === null) return;
+
+        setIsLoading(true);
+        try {
+            const res = await fetch(`/api/chunks/adjacent?document_id=${encodeURIComponent(citation.documentId)}&chunk_index=${currentIndex}`);
+            const data = await res.json();
+
+            const target = direction === 'prev' ? data.prev : data.next;
+            if (target) {
+                setCurrentContent(target.content);
+                setCurrentIndex(target.chunkIndex);
+                // 更新上下块状态
+                checkAdjacent(citation.documentId, target.chunkIndex);
+            }
+        } catch (error) {
+            console.error('导航失败:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     if (!citation) {
         return (
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-6">
@@ -121,14 +179,8 @@ function SourcePanelContent({ citation }: { citation: Citation | null }) {
             <div className="shrink-0 px-4 py-3 border-b border-border bg-muted/50 space-y-2">
                 <div className="flex items-center gap-2 text-sm">
                     <span className="text-muted-foreground">来源：</span>
-                    <span className="font-medium">{citation.fileName}</span>
+                    <span className="font-medium">{citation.fileName?.replace('.pdf', '')}</span>
                 </div>
-                {citation.page && (
-                    <div className="flex items-center gap-2 text-sm">
-                        <span className="text-muted-foreground">页码：</span>
-                        <span>第 {citation.page} 页</span>
-                    </div>
-                )}
                 {citation.rerank_score && (
                     <div className="flex items-center gap-2 text-sm">
                         <span className="text-muted-foreground">相关度：</span>
@@ -137,13 +189,59 @@ function SourcePanelContent({ citation }: { citation: Citation | null }) {
                         </span>
                     </div>
                 )}
+                {/* 下载链接 */}
+                <div className="flex items-center gap-2 text-sm">
+                    <span className="text-muted-foreground">下载：</span>
+                    {citation.downloadUrl ? (
+                        <a
+                            href={citation.downloadUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary hover:underline flex items-center gap-1"
+                        >
+                            <Download className="h-3 w-3" />
+                            <span>下载原文</span>
+                        </a>
+                    ) : (
+                        <span className="text-muted-foreground/60 text-xs">暂无下载链接</span>
+                    )}
+                </div>
             </div>
 
             {/* 原文内容 */}
             <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
                 <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                    {citation.content || '暂无原文内容'}
+                    {currentContent || citation.content || '暂无原文内容'}
                 </p>
+            </div>
+
+            {/* 上下块导航 - 固定在底部，与输入框区域高度一致 */}
+            <div className="shrink-0 border-t border-border bg-background/80 backdrop-blur-sm">
+                <div className="p-4 flex items-center justify-between gap-4">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigateTo('prev')}
+                        disabled={!hasPrev || isLoading}
+                        className="gap-1 flex-1"
+                    >
+                        <ChevronLeft className="h-4 w-4" />
+                        <span>上一块</span>
+                    </Button>
+                    <span className="text-xs text-muted-foreground shrink-0">
+                        {isLoading ? '加载中...' : `#${currentIndex ?? '-'}`}
+                    </span>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigateTo('next')}
+                        disabled={!hasNext || isLoading}
+                        className="gap-1 flex-1"
+                    >
+                        <span>下一块</span>
+                        <ChevronRight className="h-4 w-4" />
+                    </Button>
+                </div>
             </div>
         </div>
     );
