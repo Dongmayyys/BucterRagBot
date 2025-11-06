@@ -65,20 +65,24 @@ export async function POST(request: Request) {
         });
         console.log('[API] Search results count:', searchResults.length);
 
-        // 3. Rerank 精排 (获取 Top 5)
+        // 3. Rerank 精排 (获取 Top 6)
         console.log('[API] Reranking...');
-        const rankedResults = await rerank(query, searchResults, 5);
+        const rankedResults = await rerank(query, searchResults, 6);
         console.log('[API] Reranked results count:', rankedResults.length);
 
-        // 4. 构建 Context（带编号，供 LLM 使用）
-        const context = rankedResults
+        // 4. 过滤低分结果 (rerank_score < 0.15 不显示)
+        const filteredResults = rankedResults.filter(r => (r.rerank_score ?? 0) >= 0.15);
+        console.log('[API] Filtered results count (>=15%):', filteredResults.length);
+
+        // 5. 构建 Context（带编号，供 LLM 使用）
+        const context = filteredResults
             .map((r, i) => `[${i + 1}] ${r.content}`)
             .join('\n\n');
 
-        // 5. 构建 Citations（供前端展示）
+        // 6. 构建 Citations（供前端展示）
         // 查询 source_documents 映射表获取额外信息
         const citations: Citation[] = await Promise.all(
-            rankedResults.map(async (r) => {
+            filteredResults.map(async (r) => {
                 const documentId = r.metadata?.document_id as string | undefined;
                 const docMeta = documentId ? await getDocumentMeta(documentId) : null;
 
