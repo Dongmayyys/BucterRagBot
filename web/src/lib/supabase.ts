@@ -82,10 +82,22 @@ export interface DocumentMeta {
 }
 
 /**
+ * 内存缓存 - 存储已查询过的文档元数据
+ */
+const documentMetaCache = new Map<string, DocumentMeta>();
+
+/**
  * 获取文档元数据
- * 从 source_documents 表查询（暂无缓存，便于观察日志）
+ * 带内存缓存，避免重复查询
  */
 export async function getDocumentMeta(documentId: string): Promise<DocumentMeta | null> {
+    // 1. 先查缓存
+    if (documentMetaCache.has(documentId)) {
+        console.log(`[getDocumentMeta] 缓存命中: ${documentId} ✓`);
+        return documentMetaCache.get(documentId)!;
+    }
+
+    // 2. 缓存未命中，查数据库
     console.log(`[getDocumentMeta] 查询映射表: ${documentId}`);
     const startTime = Date.now();
 
@@ -101,6 +113,12 @@ export async function getDocumentMeta(documentId: string): Promise<DocumentMeta 
     if (error) {
         console.error('[getDocumentMeta] 查询失败:', error);
         return null;
+    }
+
+    // 3. 存入缓存
+    if (data) {
+        documentMetaCache.set(documentId, data);
+        console.log(`[getDocumentMeta] 已缓存: ${documentId}`);
     }
 
     return data;

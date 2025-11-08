@@ -80,7 +80,18 @@ export async function POST(request: Request) {
             .join('\n\n');
 
         // 6. 构建 Citations（供前端展示）
-        // 查询 source_documents 映射表获取额外信息
+        // 6.1 预热缓存：收集并去重 document_id，串行查询一次
+        const uniqueDocIds = [...new Set(
+            filteredResults
+                .map(r => r.metadata?.document_id as string | undefined)
+                .filter((id): id is string => !!id)
+        )];
+        console.log('[API] 预热缓存，不同的 document_id 数量:', uniqueDocIds.length);
+
+        // 并行查询所有不同的 document_id
+        await Promise.all(uniqueDocIds.map(id => getDocumentMeta(id)));
+
+        // 6.2 并行构建 citations（此时全部命中缓存）
         const citations: Citation[] = await Promise.all(
             filteredResults.map(async (r) => {
                 const documentId = r.metadata?.document_id as string | undefined;

@@ -104,12 +104,14 @@ function SourcePanelContent({ citation }: { citation: Citation | null }) {
     const [isLoading, setIsLoading] = useState(false);
     const [hasPrev, setHasPrev] = useState(false);
     const [hasNext, setHasNext] = useState(false);
+    const [isOriginalChunk, setIsOriginalChunk] = useState(true); // 是否显示原始检索的 chunk
 
     // 当选中的 citation 变化时，重置状态
     useEffect(() => {
         if (citation) {
             setCurrentContent(citation.content || null);
             setCurrentIndex(citation.chunkIndex ?? null);
+            setIsOriginalChunk(true); // 重置为原始 chunk
             // 检查是否有上下块
             checkAdjacent(citation.documentId, citation.chunkIndex);
         }
@@ -147,6 +149,7 @@ function SourcePanelContent({ citation }: { citation: Citation | null }) {
             if (target) {
                 setCurrentContent(target.content);
                 setCurrentIndex(target.chunkIndex);
+                setIsOriginalChunk(false); // 导航后不是原始 chunk
                 // 更新上下块状态
                 checkAdjacent(citation.documentId, target.chunkIndex);
             }
@@ -181,7 +184,7 @@ function SourcePanelContent({ citation }: { citation: Citation | null }) {
                     <span className="text-muted-foreground">来源：</span>
                     <span className="font-medium">{citation.fileName?.replace('.pdf', '')}</span>
                 </div>
-                {citation.rerank_score && (
+                {isOriginalChunk && citation.rerank_score && (
                     <div className="flex items-center gap-2 text-sm">
                         <span className="text-muted-foreground">相关度：</span>
                         <span className="text-primary font-medium">
