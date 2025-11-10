@@ -6,6 +6,7 @@ import { User, Bot } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ChatMessage, Citation } from '@/lib/types';
 import { SourceBubble } from './source-bubble';
+import { ProcessingSteps, ProcessingPhase } from './processing-steps';
 
 /**
  * 单条消息气泡组件
@@ -18,10 +19,12 @@ import { SourceBubble } from './source-bubble';
 interface MessageBubbleProps {
     message: ChatMessage;
     isStreaming?: boolean;  // 是否正在流式输出
+    phase?: ProcessingPhase; // RAG 处理阶段
+    hasResults?: boolean; // 是否找到了 citation
     onCitationClick?: (citation: Citation) => void;
 }
 
-export function MessageBubble({ message, isStreaming, onCitationClick }: MessageBubbleProps) {
+export function MessageBubble({ message, isStreaming, phase = 'idle', hasResults = true, onCitationClick }: MessageBubbleProps) {
     const isUser = message.role === 'user';
 
     return (
@@ -53,44 +56,50 @@ export function MessageBubble({ message, isStreaming, onCitationClick }: Message
                         {message.content}
                     </p>
                 ) : (
-                    // AI 消息：Markdown 渲染
-                    <div className="prose prose-sm dark:prose-invert max-w-none">
-                        <ReactMarkdown
-                            remarkPlugins={[remarkGfm]}
-                            components={{
-                                // 自定义表格样式
-                                table: ({ children }) => (
-                                    <div className="overflow-x-auto my-2">
-                                        <table className="min-w-full text-xs">{children}</table>
-                                    </div>
-                                ),
-                                // 自定义代码块样式
-                                code: ({ children, className }) => {
-                                    const isInline = !className;
-                                    return isInline ? (
-                                        <code className="bg-muted px-1.5 py-0.5 rounded text-xs">
+                    // AI 消息：进度指示器 + Markdown 渲染
+                    <>
+                        {/* RAG 处理流程指示器（劈括 done 状态也保留显示） */}
+                        {phase !== 'idle' && (
+                            <ProcessingSteps phase={phase} hasResults={hasResults} />
+                        )}
+                        <div className="prose prose-sm dark:prose-invert max-w-none">
+                            <ReactMarkdown
+                                remarkPlugins={[remarkGfm]}
+                                components={{
+                                    // 自定义表格样式
+                                    table: ({ children }) => (
+                                        <div className="overflow-x-auto my-2">
+                                            <table className="min-w-full text-xs">{children}</table>
+                                        </div>
+                                    ),
+                                    // 自定义代码块样式
+                                    code: ({ children, className }) => {
+                                        const isInline = !className;
+                                        return isInline ? (
+                                            <code className="bg-muted px-1.5 py-0.5 rounded text-xs">
+                                                {children}
+                                            </code>
+                                        ) : (
+                                            <code className={className}>{children}</code>
+                                        );
+                                    },
+                                    // 自定义链接样式
+                                    a: ({ children, href }) => (
+                                        <a
+                                            href={href}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-primary underline underline-offset-2 hover:text-primary/80"
+                                        >
                                             {children}
-                                        </code>
-                                    ) : (
-                                        <code className={className}>{children}</code>
-                                    );
-                                },
-                                // 自定义链接样式
-                                a: ({ children, href }) => (
-                                    <a
-                                        href={href}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-primary underline underline-offset-2 hover:text-primary/80"
-                                    >
-                                        {children}
-                                    </a>
-                                ),
-                            }}
-                        >
-                            {message.content}
-                        </ReactMarkdown>
-                    </div>
+                                        </a>
+                                    ),
+                                }}
+                            >
+                                {message.content}
+                            </ReactMarkdown>
+                        </div>
+                    </>
                 )}
 
                 {/* 流式输出时的光标动画 */}

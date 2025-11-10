@@ -5,6 +5,7 @@ import { ChatLayout } from '@/components/chat/chat-layout';
 import { ChatList } from '@/components/chat/chat-list';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatMessage, Citation } from '@/lib/types';
+import { ProcessingPhase } from '@/components/chat/processing-steps';
 
 /**
  * 主页面 - 聊天界面
@@ -16,6 +17,7 @@ import { ChatMessage, Citation } from '@/lib/types';
  * 4. setMessages() → ChatList → MessageBubble → SourceBubble
  * 5. 点击引用 → setSelectedCitation → SourcePanel 显示详情
  * 6. 点击停止 → abortController.abort() → 终止流式输出
+ * 7. phase 状态追踪 RAG 处理阶段（searching → organizing → generating → done）
  */
 
 // 分隔符常量
@@ -26,6 +28,8 @@ export default function ChatPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedCitation, setSelectedCitation] = useState<Citation | null>(null);
+  const [phase, setPhase] = useState<ProcessingPhase>('idle');
+  const [hasResults, setHasResults] = useState(true); // 是否找到了 citations
 
   // 用于终止请求的 AbortController
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -39,6 +43,7 @@ export default function ChatPage() {
 
     setError(null);
     setIsLoading(true);
+    setPhase('searching'); // 阶段 1：查找资料
 
     // 创建新的 AbortController
     abortControllerRef.current = new AbortController();
@@ -79,6 +84,8 @@ export default function ChatPage() {
       const reader = response.body?.getReader();
       if (!reader) throw new Error('No response body');
 
+      setPhase('organizing'); // 阶段 2：整理资料（收到响应）
+
       const decoder = new TextDecoder();
       let buffer = '';           // 累积缓冲区
       let citations: Citation[] = [];  // 解析出的 citations
@@ -99,13 +106,16 @@ export default function ChatPage() {
             const parsed = JSON.parse(jsonPart.trim());
             citations = parsed.citations || [];
             console.log('[Frontend] Parsed citations:', citations.length);
+            setHasResults(citations.length > 0); // 设置是否找到了结果
           } catch (e) {
             console.error('[Frontend] Failed to parse citations:', e);
+            setHasResults(false);
           }
 
           // 重置 buffer 为分隔符后的内容
           buffer = rest?.trim() || '';
           streamStarted = true;
+          setPhase('generating'); // 阶段 3：生成回复（LLM 开始输出）
         }
 
         // 7. 更新 assistant 消息（仅在流开始后）
@@ -119,16 +129,20 @@ export default function ChatPage() {
           );
         }
       }
+
+      setPhase('done'); // 完成
     } catch (err) {
       // 检查是否是用户主动取消
       if (err instanceof Error && err.name === 'AbortError') {
         console.log('[Frontend] Request aborted by user');
+        setPhase('done');
         // 不移除消息，保留已生成的内容
         return;
       }
 
       console.error('Chat error:', err);
       setError(err instanceof Error ? err.message : 'Unknown error');
+      setPhase('idle');
       // 移除空的 assistant 消息
       setMessages(prev => prev.filter(msg => msg.id !== assistantId));
     } finally {
@@ -158,6 +172,7 @@ export default function ChatPage() {
     setSelectedCitation(null);
     setError(null);
     setIsLoading(false);
+    setPhase('idle');
   }, []);
 
   /**
@@ -178,6 +193,8 @@ export default function ChatPage() {
       <ChatList
         messages={messages}
         isLoading={isLoading}
+        phase={phase}
+        hasResults={hasResults}
         onSuggestionClick={sendMessage}
         onCitationClick={handleCitationClick}
       />

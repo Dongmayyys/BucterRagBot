@@ -5,6 +5,7 @@ import { Sparkles } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChatMessage, Citation, SuggestionCard, DEFAULT_SUGGESTIONS } from '@/lib/types';
 import { MessageBubble } from './message-bubble';
+import { ProcessingPhase } from './processing-steps';
 
 /**
  * 消息列表容器
@@ -19,11 +20,13 @@ import { MessageBubble } from './message-bubble';
 interface ChatListProps {
     messages: ChatMessage[];
     isLoading?: boolean;
+    phase?: ProcessingPhase;
+    hasResults?: boolean;
     onSuggestionClick?: (query: string) => void;
     onCitationClick?: (citation: Citation) => void;
 }
 
-export function ChatList({ messages, isLoading, onSuggestionClick, onCitationClick }: ChatListProps) {
+export function ChatList({ messages, isLoading, phase = 'idle', hasResults = true, onSuggestionClick, onCitationClick }: ChatListProps) {
     const bottomRef = useRef<HTMLDivElement>(null);
 
     // 消息更新时自动滚动到底部
@@ -66,14 +69,19 @@ export function ChatList({ messages, isLoading, onSuggestionClick, onCitationCli
         <div className="flex-1 overflow-y-auto px-4 custom-scrollbar">
             <div className="max-w-3xl mx-auto py-6 space-y-6">
                 {/* 渲染所有消息 */}
-                {messages.map((message, idx) => (
-                    <MessageBubble
-                        key={message.id || idx}
-                        message={message}
-                        isStreaming={isLoading && idx === messages.length - 1 && message.role === 'assistant'}
-                        onCitationClick={onCitationClick}
-                    />
-                ))}
+                {messages.map((message, idx) => {
+                    const isLastAssistant = idx === messages.length - 1 && message.role === 'assistant';
+                    return (
+                        <MessageBubble
+                            key={message.id || idx}
+                            message={message}
+                            isStreaming={isLoading && isLastAssistant}
+                            phase={isLastAssistant ? phase : 'idle'}
+                            hasResults={hasResults}
+                            onCitationClick={onCitationClick}
+                        />
+                    );
+                })}
 
                 {/* 加载中：骨架屏 */}
                 {isLoading && messages[messages.length - 1]?.role === 'user' && (
