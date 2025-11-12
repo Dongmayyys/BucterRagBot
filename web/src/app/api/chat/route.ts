@@ -6,13 +6,12 @@ import { Citation } from '@/lib/types';
 /**
  * API Route: /api/chat
  * 
- * RAG 对话的核心入口：
+ * RAG 对话的核心入口（支持意图分类）：
  * 1. 接收消息
- * 2. 生成查询向量 (Embedding)
- * 3. 向量检索 (Supabase)
- * 4. Rerank 精排 (SiliconFlow)
- * 5. LLM 生成回答 (直接调用 SiliconFlow Chat Completions API)
- * 6. 返回流式文本响应
+ * 2. 意图分类（query / chat）
+ * 3. 如果是 query：向量检索 → Rerank → LLM 生成
+ * 4. 如果是 chat：直接 LLM 回复
+ * 5. 返回流式文本响应
  */
 
 // SiliconFlow 配置 (仅用于 Embedding)
@@ -28,6 +27,8 @@ interface UIMessage {
     role: string;
     parts?: { type: string; text?: string }[];
 }
+
+type Intent = 'query' | 'chat';
 
 export async function POST(request: Request) {
     console.log('[API] Received chat request');
@@ -48,72 +49,70 @@ export async function POST(request: Request) {
             );
         }
 
-        // 1. 生成查询向量
-        console.log('[API] Generating embedding...');
-        const { embedding: queryEmbedding } = await embed({
-            model: embeddingModel,
-            value: query,
-        });
-        console.log('[API] Embedding generated, length:', queryEmbedding.length);
+        // ★ 1. 意图分类（轻量调用，无 context）
+        console.log('[API] Classifying intent...');
+        const intent = await classifyIntent(query);
+        console.log('[API] Intent:', intent);
 
-        // 2. 向量检索 (获取 Top 20)
-        console.log('[API] Performing vector search...');
-        const searchResults = await vectorSearch(queryEmbedding, {
-            matchCount: 20,
-            matchThreshold: 0.3,
-            // 数据库应只保留最优切分策略，无需 filter
-        });
-        console.log('[API] Search results count:', searchResults.length);
+        let context = '';
+        let citations: Citation[] = [];
 
-        // 3. Rerank 精排 (获取 Top 6)
-        console.log('[API] Reranking...');
-        const rankedResults = await rerank(query, searchResults, 6);
-        console.log('[API] Reranked results count:', rankedResults.length);
+        // ★ 2. 根据意图决定是否检索
+        if (intent === 'query') {
+            // 2a. 生成查询向量
+            console.log('[API] Generating embedding...');
+            const { embedding: queryEmbedding } = await embed({
+                model: embeddingModel,
+                value: query,
+            });
+            console.log('[API] Embedding generated, length:', queryEmbedding.length);
 
-        // 4. 过滤低分结果 (rerank_score < 0.15 不显示)
-        const filteredResults = rankedResults.filter(r => (r.rerank_score ?? 0) >= 0.15);
-        console.log('[API] Filtered results count (>=15%):', filteredResults.length);
+            // 2b. 向量检索 (获取 Top 20)
+            console.log('[API] Performing vector search...');
+            const searchResults = await vectorSearch(queryEmbedding, {
+                matchCount: 20,
+                matchThreshold: 0.3,
+            });
+            console.log('[API] Search results count:', searchResults.length);
 
-        // 5. 构建 Context（带编号，供 LLM 使用）
-        const context = filteredResults
-            .map((r, i) => `[${i + 1}] ${r.content}`)
-            .join('\n\n');
+            // 2c. Rerank 精排 (获取 Top 6)
+            console.log('[API] Reranking...');
+            const rankedResults = await rerank(query, searchResults, 6);
+            console.log('[API] Reranked results count:', rankedResults.length);
 
-        // 6. 构建 Citations（供前端展示）
-        // 6.1 预热缓存：收集并去重 document_id，串行查询一次
-        const uniqueDocIds = [...new Set(
-            filteredResults
-                .map(r => r.metadata?.document_id as string | undefined)
-                .filter((id): id is string => !!id)
-        )];
-        console.log('[API] 预热缓存，不同的 document_id 数量:', uniqueDocIds.length);
+            // 2d. 过滤低分结果 (rerank_score < 0.15 不显示)
+            const filteredResults = rankedResults.filter(r => (r.rerank_score ?? 0) >= 0.15);
+            console.log('[API] Filtered results count (>=15%):', filteredResults.length);
 
-        // 并行查询所有不同的 document_id
-        await Promise.all(uniqueDocIds.map(id => getDocumentMeta(id)));
+            // 2e. 构建 Context（带编号，供 LLM 使用）
+            context = filteredResults
+                .map((r, i) => `[${i + 1}] ${r.content}`)
+                .join('\n\n');
 
-        // 6.2 并行构建 citations（此时全部命中缓存）
-        const citations: Citation[] = await Promise.all(
-            filteredResults.map(async (r) => {
-                const documentId = r.metadata?.document_id as string | undefined;
-                const docMeta = documentId ? await getDocumentMeta(documentId) : null;
+            // 2f. 构建 Citations（供前端展示）
+            citations = await Promise.all(
+                filteredResults.map(async (r) => {
+                    const documentId = r.metadata?.document_id as string | undefined;
+                    const docMeta = documentId ? await getDocumentMeta(documentId) : null;
 
-                return {
-                    id: r.id,
-                    fileName: r.metadata?.source || '未知来源',
-                    page: r.metadata?.page,
-                    content: r.content,
-                    rerank_score: r.rerank_score,
-                    // 新增字段
-                    documentId: documentId,
-                    chunkIndex: r.metadata?.chunk_index as number | undefined,
-                    downloadUrl: docMeta?.metadata?.download_url || undefined,
-                };
-            })
-        );
-        console.log('[API] Citations count:', citations.length);
+                    return {
+                        id: r.id,
+                        fileName: r.metadata?.source || '未知来源',
+                        page: r.metadata?.page,
+                        content: r.content,
+                        rerank_score: r.rerank_score,
+                        documentId: documentId,
+                        chunkIndex: r.metadata?.chunk_index as number | undefined,
+                        downloadUrl: docMeta?.metadata?.download_url || undefined,
+                    };
+                })
+            );
+            console.log('[API] Citations count:', citations.length);
+        }
 
-        // 5. 构建 System Prompt
-        const systemPrompt = `你是一个专业的校园问答助手，负责回答学生关于学校规章制度、服务设施等问题。
+        // 3. 构建 System Prompt（根据意图不同）
+        const systemPrompt = intent === 'query'
+            ? `你是一个专业的校园问答助手，负责回答学生关于学校规章制度、服务设施等问题。
 
 请严格根据以下参考资料回答问题。如果参考资料中没有相关信息，请诚实告知用户。
 
@@ -123,9 +122,11 @@ ${context || '暂无参考资料'}
 ## 回答要求
 1. 回答要准确、简洁、专业
 2. 如果涉及具体流程，请分步骤说明
-3. 可以使用 Markdown 格式（列表、表格等）`;
+3. 可以使用 Markdown 格式（列表、表格等）`
+            : `你是一个友好的校园助手"巴克特"。用户正在和你闲聊，请用轻松友好的语气回复。
+回复要简短、自然，不要过于正式。可以适当使用 emoji 表情。`;
 
-        // 6. 构建聊天消息
+        // 4. 构建聊天消息
         const chatMessages = [
             { role: 'system', content: systemPrompt },
             ...messages.slice(-6).map((msg) => ({
@@ -134,7 +135,7 @@ ${context || '暂无参考资料'}
             })),
         ];
 
-        // 7. 直接调用 SiliconFlow Chat Completions API (流式)
+        // 5. 调用 LLM（流式）
         console.log('[API] Calling SiliconFlow Chat Completions API...');
         const llmResponse = await fetch('https://api.siliconflow.cn/v1/chat/completions', {
             method: 'POST',
@@ -158,7 +159,7 @@ ${context || '暂无参考资料'}
             );
         }
 
-        // 8. 转换 SSE 流为纯文本流
+        // 6. 转换 SSE 流为纯文本流
         const reader = llmResponse.body?.getReader();
         const encoder = new TextEncoder();
 
@@ -169,9 +170,9 @@ ${context || '暂无参考资料'}
                     return;
                 }
 
-                // ★ 先发送 citations JSON + 分隔符
-                const citationsLine = JSON.stringify({ citations }) + '\n---STREAM_START---\n';
-                controller.enqueue(encoder.encode(citationsLine));
+                // ★ 先发送 intent + citations JSON + 分隔符
+                const headerLine = JSON.stringify({ intent, citations }) + '\n---STREAM_START---\n';
+                controller.enqueue(encoder.encode(headerLine));
 
                 const decoder = new TextDecoder();
                 let buffer = '';
@@ -223,6 +224,50 @@ ${context || '暂无参考资料'}
             JSON.stringify({ error: 'Internal server error', details: String(error) }),
             { status: 500, headers: { 'Content-Type': 'application/json' } }
         );
+    }
+}
+
+/**
+ * 意图分类（轻量 LLM 调用，无 context）
+ * 返回 'query' 或 'chat'
+ */
+async function classifyIntent(query: string): Promise<Intent> {
+    const classifyPrompt = `判断以下用户输入的意图。如果用户在询问学校相关的问题（规章制度、设施、流程等）请回复 query。如果用户只是在闲聊、打招呼或问与学校无关的问题请回复 chat。
+
+用户输入：${query}
+
+只回复一个单词：query 或 chat`;
+
+    try {
+        const response = await fetch('https://api.siliconflow.cn/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${process.env.SILICONFLOW_API_KEY}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                model: 'Qwen/Qwen3-8B',
+                messages: [{ role: 'user', content: classifyPrompt }],
+                max_tokens: 10,
+                temperature: 0,
+            }),
+        });
+
+        if (!response.ok) {
+            console.error('[Intent] API failed:', await response.text());
+            return 'query'; // 默认走 RAG
+        }
+
+        const data = await response.json();
+        const result = data.choices?.[0]?.message?.content?.toLowerCase().trim() || '';
+
+        if (result.includes('chat')) {
+            return 'chat';
+        }
+        return 'query';
+    } catch (error) {
+        console.error('[Intent] Error:', error);
+        return 'query'; // 出错时默认走 RAG
     }
 }
 

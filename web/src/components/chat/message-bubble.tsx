@@ -21,10 +21,11 @@ interface MessageBubbleProps {
     isStreaming?: boolean;  // 是否正在流式输出
     phase?: ProcessingPhase; // RAG 处理阶段
     hasResults?: boolean; // 是否找到了 citation
+    isChat?: boolean; // 是否为闲聊模式
     onCitationClick?: (citation: Citation) => void;
 }
 
-export function MessageBubble({ message, isStreaming, phase = 'idle', hasResults = true, onCitationClick }: MessageBubbleProps) {
+export function MessageBubble({ message, isStreaming, phase = 'idle', hasResults = true, isChat = false, onCitationClick }: MessageBubbleProps) {
     const isUser = message.role === 'user';
 
     return (
@@ -58,9 +59,9 @@ export function MessageBubble({ message, isStreaming, phase = 'idle', hasResults
                 ) : (
                     // AI 消息：进度指示器 + Markdown 渲染
                     <>
-                        {/* RAG 处理流程指示器（劈括 done 状态也保留显示） */}
+                        {/* RAG 处理流程指示器（done 状态也保留显示） */}
                         {phase !== 'idle' && (
-                            <ProcessingSteps phase={phase} hasResults={hasResults} />
+                            <ProcessingSteps phase={phase} hasResults={hasResults} isChat={isChat} />
                         )}
                         <div className="prose prose-sm dark:prose-invert max-w-none">
                             <ReactMarkdown

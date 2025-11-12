@@ -22,11 +22,12 @@ interface ChatListProps {
     isLoading?: boolean;
     phase?: ProcessingPhase;
     hasResults?: boolean;
+    isChat?: boolean;
     onSuggestionClick?: (query: string) => void;
     onCitationClick?: (citation: Citation) => void;
 }
 
-export function ChatList({ messages, isLoading, phase = 'idle', hasResults = true, onSuggestionClick, onCitationClick }: ChatListProps) {
+export function ChatList({ messages, isLoading, phase = 'idle', hasResults = true, isChat = false, onSuggestionClick, onCitationClick }: ChatListProps) {
     const bottomRef = useRef<HTMLDivElement>(null);
 
     // 消息更新时自动滚动到底部
@@ -78,6 +79,7 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
                             isStreaming={isLoading && isLastAssistant}
                             phase={isLastAssistant ? phase : 'idle'}
                             hasResults={hasResults}
+                            isChat={isChat}
                             onCitationClick={onCitationClick}
                         />
                     );

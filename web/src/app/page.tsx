@@ -10,14 +10,11 @@ import { ProcessingPhase } from '@/components/chat/processing-steps';
 /**
  * 主页面 - 聊天界面
  * 
- * 数据流：
- * 1. 用户输入 → ChatInput → sendMessage()
- * 2. sendMessage() → fetch('/api/chat') → 流式响应
- * 3. 解析响应：先提取 citations，再渲染 LLM 文本
- * 4. setMessages() → ChatList → MessageBubble → SourceBubble
- * 5. 点击引用 → setSelectedCitation → SourcePanel 显示详情
- * 6. 点击停止 → abortController.abort() → 终止流式输出
- * 7. phase 状态追踪 RAG 处理阶段（searching → organizing → generating → done）
+ * 数据流（四阶段）：
+ * 1. 用户输入 → thinking（意图分类）
+ * 2. 如果是 query → searching → organizing → generating
+ * 3. 如果是 chat → 跳过 searching/organizing → generating
+ * 4. 完成 → done
  */
 
 // 分隔符常量
@@ -29,21 +26,23 @@ export default function ChatPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedCitation, setSelectedCitation] = useState<Citation | null>(null);
   const [phase, setPhase] = useState<ProcessingPhase>('idle');
-  const [hasResults, setHasResults] = useState(true); // 是否找到了 citations
+  const [hasResults, setHasResults] = useState(true);
+  const [isChat, setIsChat] = useState(false); // 是否为闲聊模式
 
   // 用于终止请求的 AbortController
   const abortControllerRef = useRef<AbortController | null>(null);
 
   /**
    * 核心发送逻辑
-   * @param content 消息内容
    */
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim() || isLoading) return;
 
     setError(null);
     setIsLoading(true);
-    setPhase('searching'); // 阶段 1：查找资料
+    setPhase('thinking'); // ★ 阶段 1：思考（意图分类）
+    setIsChat(false);
+    setHasResults(true);
 
     // 创建新的 AbortController
     abortControllerRef.current = new AbortController();
@@ -61,14 +60,14 @@ export default function ChatPage() {
     setMessages(prev => [...prev, { id: assistantId, role: 'assistant', content: '' }]);
 
     try {
-      // 3. 构建请求体（AI SDK v5 UIMessage 格式）
+      // 3. 构建请求体
       const uiMessages = [...messages, userMessage].map(msg => ({
         id: msg.id,
         role: msg.role,
         parts: [{ type: 'text', text: msg.content }],
       }));
 
-      // 4. 发送请求（带 signal 用于终止）
+      // 4. 发送请求
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -84,12 +83,11 @@ export default function ChatPage() {
       const reader = response.body?.getReader();
       if (!reader) throw new Error('No response body');
 
-      setPhase('organizing'); // 阶段 2：整理资料（收到响应）
-
       const decoder = new TextDecoder();
-      let buffer = '';           // 累积缓冲区
-      let citations: Citation[] = [];  // 解析出的 citations
-      let streamStarted = false; // 是否已经开始接收 LLM 文本
+      let buffer = '';
+      let citations: Citation[] = [];
+      let streamStarted = false;
+      let intent: 'query' | 'chat' = 'query';
 
       while (true) {
         const { done, value } = await reader.read();
@@ -97,53 +95,61 @@ export default function ChatPage() {
 
         buffer += decoder.decode(value, { stream: true });
 
-        // 6. 检测分隔符，提取 citations
+        // 6. 检测分隔符，提取 intent + citations
         if (!streamStarted && buffer.includes(STREAM_SEPARATOR)) {
           const [jsonPart, rest] = buffer.split(STREAM_SEPARATOR);
 
-          // 解析 citations JSON
           try {
             const parsed = JSON.parse(jsonPart.trim());
+            intent = parsed.intent || 'query';
             citations = parsed.citations || [];
-            console.log('[Frontend] Parsed citations:', citations.length);
-            setHasResults(citations.length > 0); // 设置是否找到了结果
+            console.log('[Frontend] Intent:', intent, 'Citations:', citations.length);
+
+            setIsChat(intent === 'chat');
+            setHasResults(citations.length > 0);
+
+            // ★ 根据意图设置阶段
+            if (intent === 'chat') {
+              // 闲聊：跳过查询和整理，直接进入生成
+              setPhase('generating');
+            } else {
+              // 知识查询：显示查询阶段完成，进入整理（后端已完成，这里模拟进度）
+              setPhase('searching');
+              setTimeout(() => setPhase('organizing'), 100);
+              setTimeout(() => setPhase('generating'), 200);
+            }
           } catch (e) {
-            console.error('[Frontend] Failed to parse citations:', e);
+            console.error('[Frontend] Failed to parse header:', e);
             setHasResults(false);
           }
 
-          // 重置 buffer 为分隔符后的内容
           buffer = rest?.trim() || '';
           streamStarted = true;
-          setPhase('generating'); // 阶段 3：生成回复（LLM 开始输出）
         }
 
-        // 7. 更新 assistant 消息（仅在流开始后）
+        // 7. 更新 assistant 消息
         if (streamStarted) {
           setMessages(prev =>
             prev.map(msg =>
               msg.id === assistantId
-                ? { ...msg, content: buffer, citations }
+                ? { ...msg, content: buffer, citations: intent === 'query' ? citations : undefined }
                 : msg
             )
           );
         }
       }
 
-      setPhase('done'); // 完成
+      setPhase('done');
     } catch (err) {
-      // 检查是否是用户主动取消
       if (err instanceof Error && err.name === 'AbortError') {
         console.log('[Frontend] Request aborted by user');
         setPhase('done');
-        // 不移除消息，保留已生成的内容
         return;
       }
 
       console.error('Chat error:', err);
       setError(err instanceof Error ? err.message : 'Unknown error');
       setPhase('idle');
-      // 移除空的 assistant 消息
       setMessages(prev => prev.filter(msg => msg.id !== assistantId));
     } finally {
       setIsLoading(false);
@@ -161,10 +167,9 @@ export default function ChatPage() {
   }, []);
 
   /**
-   * 清除对话历史（同时终止 LLM 输出）
+   * 清除对话历史
    */
   const handleClear = useCallback(() => {
-    // 先终止正在进行的请求
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
@@ -173,6 +178,7 @@ export default function ChatPage() {
     setError(null);
     setIsLoading(false);
     setPhase('idle');
+    setIsChat(false);
   }, []);
 
   /**
@@ -195,6 +201,7 @@ export default function ChatPage() {
         isLoading={isLoading}
         phase={phase}
         hasResults={hasResults}
+        isChat={isChat}
         onSuggestionClick={sendMessage}
         onCitationClick={handleCitationClick}
       />

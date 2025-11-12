@@ -1,57 +1,80 @@
 'use client';
 
-import { Check, Loader2, X } from 'lucide-react';
+import { Check, Loader2, X, MinusCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 /**
- * RAG 处理流程指示器
+ * RAG 处理流程指示器 - 四阶段版本
  * 
- * 显示三个阶段的进度：
- * 1. 查找资料 (searching)
- * 2. 整理资料 (organizing) 
- * 3. 生成回复 (generating)
+ * 阶段：
+ * 1. 思考 (thinking) - 意图识别
+ * 2. 查询 (searching) - 向量检索
+ * 3. 整理 (organizing) - Rerank
+ * 4. 回复 (generating) - LLM 生成
  * 
- * 状态说明：
- * - 等待中：灰色圆圈
- * - 进行中：旋转动画
- * - 已完成且有结果：绿色打勾 ✓
- * - 已完成但无结果：红色打叉 ✗（仅前两步）
+ * 状态：
+ * - pending：灰色空心圆
+ * - active：旋转动画
+ * - done：绿色打勾
+ * - failed：红色打叉（查询无结果）
+ * - skipped：灰色圆圈带斜杠（闲聊时跳过）
  */
 
-export type ProcessingPhase = 'idle' | 'searching' | 'organizing' | 'generating' | 'done';
+export type ProcessingPhase = 'idle' | 'thinking' | 'searching' | 'organizing' | 'generating' | 'done';
 
 interface ProcessingStepsProps {
     phase: ProcessingPhase;
     hasResults?: boolean; // 是否找到了 citation
+    isChat?: boolean; // 是否为闲聊模式（跳过查询/整理）
 }
 
 const steps = [
-    { key: 'searching', label: '查找资料', icon: '🔍', affectedByResults: true },
-    { key: 'organizing', label: '整理资料', icon: '📚', affectedByResults: true },
-    { key: 'generating', label: '生成回复', icon: '✍️', affectedByResults: false },
+    { key: 'thinking', label: '思考', icon: '🤔', canSkip: false, affectedByResults: false },
+    { key: 'searching', label: '查询', icon: '🔍', canSkip: true, affectedByResults: true },
+    { key: 'organizing', label: '整理', icon: '📚', canSkip: true, affectedByResults: true },
+    { key: 'generating', label: '回复', icon: '✍️', canSkip: false, affectedByResults: false },
 ] as const;
 
 type StepKey = typeof steps[number]['key'];
+type StepStatus = 'pending' | 'active' | 'done' | 'failed' | 'skipped';
 
-function getStepStatus(stepKey: StepKey, phase: ProcessingPhase): 'pending' | 'active' | 'done' {
+function getStepStatus(
+    stepKey: StepKey,
+    phase: ProcessingPhase,
+    isChat: boolean,
+    hasResults: boolean
+): StepStatus {
     const phaseOrder: Record<ProcessingPhase, number> = {
         idle: -1,
-        searching: 0,
-        organizing: 1,
-        generating: 2,
-        done: 3,
+        thinking: 0,
+        searching: 1,
+        organizing: 2,
+        generating: 3,
+        done: 4,
     };
 
     const stepOrder: Record<StepKey, number> = {
-        searching: 0,
-        organizing: 1,
-        generating: 2,
+        thinking: 0,
+        searching: 1,
+        organizing: 2,
+        generating: 3,
     };
 
     const currentPhaseIndex = phaseOrder[phase];
     const stepIndex = stepOrder[stepKey];
 
+    // 闲聊模式：查询和整理步骤跳过
+    const step = steps.find(s => s.key === stepKey)!;
+    if (isChat && step.canSkip && currentPhaseIndex > stepIndex) {
+        return 'skipped';
+    }
+
+    // 查询模式：根据结果判断
     if (currentPhaseIndex > stepIndex) {
+        // 如果没有结果且该步骤受结果影响
+        if (!hasResults && step.affectedByResults) {
+            return 'failed';
+        }
         return 'done';
     } else if (currentPhaseIndex === stepIndex) {
         return 'active';
@@ -59,8 +82,7 @@ function getStepStatus(stepKey: StepKey, phase: ProcessingPhase): 'pending' | 'a
     return 'pending';
 }
 
-export function ProcessingSteps({ phase, hasResults = true }: ProcessingStepsProps) {
-    // idle 状态不显示
+export function ProcessingSteps({ phase, hasResults = true, isChat = false }: ProcessingStepsProps) {
     if (phase === 'idle') {
         return null;
     }
@@ -68,9 +90,7 @@ export function ProcessingSteps({ phase, hasResults = true }: ProcessingStepsPro
     return (
         <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3 flex-wrap">
             {steps.map((step, idx) => {
-                const status = getStepStatus(step.key, phase);
-                // 如果没有结果且该步骤受影响，显示失败图标
-                const showFailed = status === 'done' && !hasResults && step.affectedByResults;
+                const status = getStepStatus(step.key, phase, isChat, hasResults);
 
                 return (
                     <div key={step.key} className="flex items-center gap-1">
@@ -78,8 +98,8 @@ export function ProcessingSteps({ phase, hasResults = true }: ProcessingStepsPro
                         <span className={cn(
                             'flex items-center gap-1 transition-colors',
                             status === 'active' && 'text-foreground font-medium',
-                            status === 'done' && !showFailed && 'text-muted-foreground',
-                            showFailed && 'text-destructive/70'
+                            (status === 'done' || status === 'failed') && 'text-muted-foreground',
+                            status === 'skipped' && 'text-muted-foreground/50'
                         )}>
                             <span>{step.icon}</span>
                             <span>{step.label}</span>
@@ -93,15 +113,18 @@ export function ProcessingSteps({ phase, hasResults = true }: ProcessingStepsPro
                             {status === 'active' && (
                                 <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
                             )}
-                            {status === 'done' && !showFailed && (
+                            {status === 'done' && (
                                 <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-green-500 text-white">
                                     <Check className="w-2.5 h-2.5" strokeWidth={3} />
                                 </span>
                             )}
-                            {showFailed && (
+                            {status === 'failed' && (
                                 <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-destructive text-white">
                                     <X className="w-2.5 h-2.5" strokeWidth={3} />
                                 </span>
+                            )}
+                            {status === 'skipped' && (
+                                <MinusCircle className="w-3.5 h-3.5 text-muted-foreground/40" />
                             )}
                         </span>
 
