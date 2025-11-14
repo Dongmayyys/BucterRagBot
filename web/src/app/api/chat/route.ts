@@ -49,21 +49,23 @@ export async function POST(request: Request) {
             );
         }
 
-        // ★ 1. 意图分类（轻量调用，无 context）
-        console.log('[API] Classifying intent...');
-        const intent = await classifyIntent(query);
+        // ★ 1. 意图分类 + Query Rewriting（融合对话历史）
+        console.log('[API] Classifying intent and rewriting query...');
+        const { intent, rewrittenQuery } = await classifyIntent(query, messages);
         console.log('[API] Intent:', intent);
+        console.log('[API] Original query:', query);
+        console.log('[API] Rewritten query:', rewrittenQuery);
 
         let context = '';
         let citations: Citation[] = [];
 
         // ★ 2. 根据意图决定是否检索
         if (intent === 'query') {
-            // 2a. 生成查询向量
+            // 2a. 生成查询向量（使用改写后的 query）
             console.log('[API] Generating embedding...');
             const { embedding: queryEmbedding } = await embed({
                 model: embeddingModel,
-                value: query,
+                value: rewrittenQuery,  // ★ 使用改写后的 query
             });
             console.log('[API] Embedding generated, length:', queryEmbedding.length);
 
@@ -75,9 +77,9 @@ export async function POST(request: Request) {
             });
             console.log('[API] Search results count:', searchResults.length);
 
-            // 2c. Rerank 精排 (获取 Top 6)
+            // 2c. Rerank 精排 (获取 Top 6)，使用改写后的 query
             console.log('[API] Reranking...');
-            const rankedResults = await rerank(query, searchResults, 6);
+            const rankedResults = await rerank(rewrittenQuery, searchResults, 6);  // ★ 使用改写后的 query
             console.log('[API] Reranked results count:', rankedResults.length);
 
             // 2d. 过滤低分结果 (rerank_score < 0.15 不显示)
@@ -228,15 +230,44 @@ ${context || '暂无参考资料'}
 }
 
 /**
- * 意图分类（轻量 LLM 调用，无 context）
- * 返回 'query' 或 'chat'
+ * 意图分类 + Query Rewriting（融合对话历史）
+ * 返回 { intent, rewrittenQuery }
  */
-async function classifyIntent(query: string): Promise<Intent> {
-    const classifyPrompt = `判断以下用户输入的意图。如果用户在询问学校相关的问题（规章制度、设施、流程等）请回复 query。如果用户只是在闲聊、打招呼或问与学校无关的问题请回复 chat。
+interface IntentResult {
+    intent: Intent;
+    rewrittenQuery: string;
+}
 
-用户输入：${query}
+async function classifyIntent(query: string, messages: UIMessage[]): Promise<IntentResult> {
+    // 构建对话历史（最近 4 轮，不含最后一条）
+    const historyMessages = messages.slice(-5, -1);
+    const historyText = historyMessages.length > 0
+        ? historyMessages.map(m => {
+            const role = m.role === 'assistant' ? 'AI' : '用户';
+            const text = extractTextFromMessage(m);
+            return `${role}：${text.slice(0, 100)}${text.length > 100 ? '...' : ''}`;
+        }).join('\n')
+        : '（无历史）';
 
-只回复一个单词：query 或 chat`;
+    const classifyPrompt = `结合对话历史，分析用户最新输入，返回 JSON（不要有其他内容）：
+{
+  "intent": "query" 或 "chat",
+  "rewritten_query": "优化后的检索查询（融合上下文，生成独立的检索语句）"
+}
+
+判断规则：
+- 如果用户在询问学校相关的问题（规章制度、设施、流程、课程等）→ intent: "query"
+- 如果用户只是闲聊、打招呼或问与学校无关的问题 → intent: "chat"
+
+rewritten_query 要求：
+- 如果用户输入包含指代词（如"这个"、"第一个"、"怎么申请"），结合对话历史进行指代消解
+- 去除口语化表达，提取关键词
+- 生成适合向量检索的独立语句
+
+对话历史：
+${historyText}
+
+用户最新输入：${query}`;
 
     try {
         const response = await fetch('https://api.siliconflow.cn/v1/chat/completions', {
@@ -248,26 +279,43 @@ async function classifyIntent(query: string): Promise<Intent> {
             body: JSON.stringify({
                 model: 'Qwen/Qwen3-8B',
                 messages: [{ role: 'user', content: classifyPrompt }],
-                max_tokens: 10,
+                max_tokens: 200,
                 temperature: 0,
             }),
         });
 
         if (!response.ok) {
             console.error('[Intent] API failed:', await response.text());
-            return 'query'; // 默认走 RAG
+            return { intent: 'query', rewrittenQuery: query };
         }
 
         const data = await response.json();
-        const result = data.choices?.[0]?.message?.content?.toLowerCase().trim() || '';
+        const content = data.choices?.[0]?.message?.content?.trim() || '';
 
-        if (result.includes('chat')) {
-            return 'chat';
+        // 尝试解析 JSON
+        try {
+            // 提取 JSON 部分（处理可能的 markdown 代码块）
+            const jsonMatch = content.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+                const parsed = JSON.parse(jsonMatch[0]);
+                const intent: Intent = parsed.intent === 'chat' ? 'chat' : 'query';
+                const rewrittenQuery = parsed.rewritten_query || query;
+
+                console.log('[Intent] Parsed result:', { intent, rewrittenQuery });
+                return { intent, rewrittenQuery };
+            }
+        } catch (parseError) {
+            console.error('[Intent] JSON parse error:', parseError, 'Content:', content);
         }
-        return 'query';
+
+        // 回退：尝试简单判断
+        if (content.toLowerCase().includes('chat')) {
+            return { intent: 'chat', rewrittenQuery: query };
+        }
+        return { intent: 'query', rewrittenQuery: query };
     } catch (error) {
         console.error('[Intent] Error:', error);
-        return 'query'; // 出错时默认走 RAG
+        return { intent: 'query', rewrittenQuery: query };
     }
 }
 
