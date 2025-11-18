@@ -1,11 +1,12 @@
 'use client';
 
-import { useRef, useEffect } from 'react';
-import { Sparkles } from 'lucide-react';
+import { useEffect, useRef } from 'react';
+import { Sparkles, ArrowDown } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChatMessage, Citation, SuggestionCard, DEFAULT_SUGGESTIONS } from '@/lib/types';
 import { MessageBubble } from './message-bubble';
 import { ProcessingPhase } from './processing-steps';
+import { useScrollToBottom } from '@/hooks/use-scroll-to-bottom';
 
 /**
  * 消息列表容器
@@ -28,12 +29,18 @@ interface ChatListProps {
 }
 
 export function ChatList({ messages, isLoading, phase = 'idle', hasResults = true, isChat = false, onSuggestionClick, onCitationClick }: ChatListProps) {
-    const bottomRef = useRef<HTMLDivElement>(null);
+    // 智能滚底 Hook
+    const [containerRef, endRef, isAtBottom, scrollToBottom, hasUnread, markUnread] = useScrollToBottom<HTMLDivElement>(isLoading);
 
-    // 消息更新时自动滚动到底部
+    // 💡 事件驱动：isLoading 从 true → false 时，调用 markUnread
+    const prevLoadingRef = useRef(isLoading);
     useEffect(() => {
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages, isLoading]);
+        if (prevLoadingRef.current && !isLoading) {
+            // streaming 结束，标记未读
+            markUnread();
+        }
+        prevLoadingRef.current = isLoading;
+    }, [isLoading, markUnread]);
 
     // 空状态：展示欢迎语和建议卡片
     if (messages.length === 0 && !isLoading) {
@@ -67,8 +74,9 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
     }
 
     return (
-        <div className="flex-1 overflow-y-auto px-4 custom-scrollbar">
-            <div className="max-w-3xl mx-auto py-6 space-y-6">
+        <div ref={containerRef} className="flex-1 overflow-y-auto px-4 custom-scrollbar relative">
+            {/* endRef 绑定到内容 div，ResizeObserver 监听其高度变化 */}
+            <div ref={endRef} className="max-w-3xl mx-auto py-6 space-y-6">
                 {/* 渲染所有消息 */}
                 {messages.map((message, idx) => {
                     const isLastAssistant = idx === messages.length - 1 && message.role === 'assistant';
@@ -89,10 +97,24 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
                 {isLoading && messages[messages.length - 1]?.role === 'user' && (
                     <LoadingSkeleton />
                 )}
-
-                {/* 滚动锚点 */}
-                <div ref={bottomRef} />
             </div>
+
+            {/* 新消息浮动按钮 - 生成中或有未读消息时显示 */}
+            {(isLoading || hasUnread) && !isAtBottom && (
+                <div className="sticky bottom-4 w-full flex justify-center pointer-events-none">
+                    <button
+                        onClick={scrollToBottom}
+                        className="flex items-center gap-2 px-4 py-2 rounded-full
+                                   bg-primary text-primary-foreground shadow-lg
+                                   hover:bg-primary/90 transition-all
+                                   animate-bounce pointer-events-auto"
+                        aria-label="滚动到底部"
+                    >
+                        <ArrowDown className="w-4 h-4" />
+                        <span className="text-sm font-medium">新消息</span>
+                    </button>
+                </div>
+            )}
         </div>
     );
 }
