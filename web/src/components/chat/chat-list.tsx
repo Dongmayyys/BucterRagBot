@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 import { Sparkles, ArrowDown } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChatMessage, Citation, SuggestionCard, DEFAULT_SUGGESTIONS } from '@/lib/types';
@@ -33,8 +33,9 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
     const [containerRef, endRef, isAtBottom, scrollToBottom, hasUnread, markUnread] = useScrollToBottom<HTMLDivElement>(isLoading);
 
     // 💡 事件驱动：isLoading 从 true → false 时，调用 markUnread
+    // 使用 useLayoutEffect 确保在渲染前同步更新，避免按钮闪烁
     const prevLoadingRef = useRef(isLoading);
-    useEffect(() => {
+    useLayoutEffect(() => {
         if (prevLoadingRef.current && !isLoading) {
             // streaming 结束，标记未读
             markUnread();
