@@ -32,16 +32,21 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
     // 智能滚底 Hook
     const [containerRef, endRef, isAtBottom, scrollToBottom, hasUnread, markUnread] = useScrollToBottom<HTMLDivElement>(isLoading);
 
-    // 💡 事件驱动：isLoading 从 true → false 时，调用 markUnread
-    // 使用 useLayoutEffect 确保在渲染前同步更新，避免按钮闪烁
+    // 💡 事件驱动
+    // - isLoading: false → true（用户发送消息）：滚到底部
+    // - isLoading: true → false（回复完毕）：标记未读
     const prevLoadingRef = useRef(isLoading);
     useLayoutEffect(() => {
+        if (!prevLoadingRef.current && isLoading) {
+            // 用户发送消息，滚到底部
+            scrollToBottom();
+        }
         if (prevLoadingRef.current && !isLoading) {
             // streaming 结束，标记未读
             markUnread();
         }
         prevLoadingRef.current = isLoading;
-    }, [isLoading, markUnread]);
+    }, [isLoading, markUnread, scrollToBottom]);
 
     // 空状态：展示欢迎语和建议卡片
     if (messages.length === 0 && !isLoading) {
