@@ -112,21 +112,52 @@ export async function POST(request: Request) {
             console.log('[API] Citations count:', citations.length);
         }
 
-        // 3. 构建 System Prompt（根据意图不同）
+        // ★ 3. 无检索结果时直接返回道歉信息（防止幻觉）
+        if (intent === 'query' && citations.length === 0) {
+            console.log('[API] No citations found, returning fallback message');
+            const fallbackMessage = `抱歉，我没有找到与您问题相关的资料 😅
+
+您可以尝试：
+- 换一种方式描述问题
+- 提供更多关键词
+- 询问其他学校相关的问题
+
+如果确实需要帮助，建议联系学校相关部门咨询。`;
+
+            const encoder = new TextEncoder();
+            const stream = new ReadableStream({
+                start(controller) {
+                    const headerLine = JSON.stringify({ intent, citations: [] }) + '\n---STREAM_START---\n';
+                    controller.enqueue(encoder.encode(headerLine));
+                    controller.enqueue(encoder.encode(fallbackMessage));
+                    controller.close();
+                },
+            });
+
+            return new Response(stream, {
+                headers: {
+                    'Content-Type': 'text/plain; charset=utf-8',
+                    'Transfer-Encoding': 'chunked',
+                },
+            });
+        }
+
+        // 4. 构建 System Prompt（根据意图不同）
         const systemPrompt = intent === 'query'
             ? `你是一个专业的校园问答助手，负责回答学生关于学校规章制度、服务设施等问题。
 
-请严格根据以下参考资料回答问题。如果参考资料中没有相关信息，请诚实告知用户。
+请严格根据以下参考资料回答问题。禁止使用参考资料之外的信息，禁止胡编乱造。
 
 ## 参考资料
-${context || '暂无参考资料'}
+${context}
 
 ## 回答要求
-1. 回答要准确、简洁、专业
+1. 只能使用参考资料中的内容回答
 2. 如果涉及具体流程，请分步骤说明
 3. 可以使用 Markdown 格式（列表、表格等）`
             : `你是一个友好的校园助手"巴克特"。用户正在和你闲聊，请用轻松友好的语气回复。
 回复要简短、自然，不要过于正式。可以适当使用 emoji 表情。`;
+
 
         // 4. 构建聊天消息
         const chatMessages = [

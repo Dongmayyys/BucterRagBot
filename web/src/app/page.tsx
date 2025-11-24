@@ -112,6 +112,9 @@ export default function ChatPage() {
             if (intent === 'chat') {
               // 闲聊：跳过查询和整理，直接进入生成
               setPhase('generating');
+            } else if (citations.length === 0) {
+              // 无检索结果：跳过动画，直接 done（避免 setTimeout 时序问题）
+              setPhase('done');
             } else {
               // 知识查询：显示查询阶段完成，进入整理（后端已完成，这里模拟进度）
               setPhase('searching');
