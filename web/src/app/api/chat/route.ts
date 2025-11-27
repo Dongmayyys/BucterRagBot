@@ -168,28 +168,70 @@ ${context}
             })),
         ];
 
-        // 5. 调用 LLM（流式）
+        // 5. 调用 LLM（流式，带超时检测）
         console.log('[API] Calling SiliconFlow Chat Completions API...');
-        const llmResponse = await fetch('https://api.siliconflow.cn/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${process.env.SILICONFLOW_API_KEY}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                model: 'Qwen/Qwen3-8B',
-                messages: chatMessages,
-                stream: true,
-            }),
-        });
+
+        // 创建超时控制器（30秒）
+        const timeoutController = new AbortController();
+        const timeoutId = setTimeout(() => timeoutController.abort(), 20000);
+
+        let llmResponse: Response;
+        try {
+            llmResponse = await fetch('https://api.siliconflow.cn/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${process.env.SILICONFLOW_API_KEY}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    model: 'Qwen/Qwen3-8B',
+                    messages: chatMessages,
+                    stream: true,
+                }),
+                signal: timeoutController.signal,
+            });
+        } catch (fetchError) {
+            clearTimeout(timeoutId);
+            console.error('[API] LLM fetch error:', fetchError);
+
+            // 返回友好的错误消息流
+            const isTimeout = fetchError instanceof Error && fetchError.name === 'AbortError';
+            const errorMessage = isTimeout
+                ? `抱歉，响应超时了 ⏳
+
+AI 服务器正在繁忙，请稍后重试。`
+                : `抱歉，连接 AI 服务失败 😢
+
+可能的原因：
+- 网络连接不稳定
+- AI 服务器暂时不可用
+
+请稍后重试。`;
+
+            return createErrorStream(intent, errorMessage);
+        }
+        clearTimeout(timeoutId);
 
         if (!llmResponse.ok) {
             const errorText = await llmResponse.text();
             console.error('[API] LLM API error:', errorText);
-            return new Response(
-                JSON.stringify({ error: 'LLM API error', details: errorText }),
-                { status: 500, headers: { 'Content-Type': 'application/json' } }
-            );
+
+            // 解析错误类型
+            let userMessage = `抱歉，AI 服务出现问题 😢
+
+请稍后重试，或联系管理员。`;
+
+            if (errorText.includes('rate_limit') || llmResponse.status === 429) {
+                userMessage = `抱歉，请求太频繁了 ⏳
+
+AI 服务有速率限制，请稍等片刻再试。`;
+            } else if (errorText.includes('context_length') || llmResponse.status === 400) {
+                userMessage = `抱歉，对话内容太长了 📝
+
+建议开始新对话后重试。`;
+            }
+
+            return createErrorStream(intent, userMessage);
         }
 
         // 6. 转换 SSE 流为纯文本流
@@ -406,4 +448,26 @@ async function rerank(
         console.error('[Rerank] Error:', error);
         return documents.slice(0, topK);
     }
+}
+
+/**
+ * 创建错误消息流响应（用于向前端返回友好错误提示）
+ */
+function createErrorStream(intent: Intent, message: string): Response {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+        start(controller) {
+            const headerLine = JSON.stringify({ intent, citations: [], error: true }) + '\n---STREAM_START---\n';
+            controller.enqueue(encoder.encode(headerLine));
+            controller.enqueue(encoder.encode(message));
+            controller.close();
+        },
+    });
+
+    return new Response(stream, {
+        headers: {
+            'Content-Type': 'text/plain; charset=utf-8',
+            'Transfer-Encoding': 'chunked',
+        },
+    });
 }
