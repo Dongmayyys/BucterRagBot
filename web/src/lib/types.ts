@@ -51,3 +51,25 @@ export const DEFAULT_SUGGESTIONS: SuggestionCard[] = [
     { emoji: '🏥', title: '校医院位置', query: '校医院在哪里？' },
     { emoji: '🏃', title: '体育补考', query: '体育补考怎么报名？' },
 ];
+
+/**
+ * 彩蛋版建议问题
+ * 多次点击 Emoji 后触发
+ */
+export const EASTER_EGG_SUGGESTIONS: SuggestionCard[] = [
+    { emoji: '🎓', title: 'BUCT 是什么', query: '北京化工大学是什么学校？' },
+    { emoji: '🧪', title: '化工强校', query: '北化有哪些优势学科？' },
+    { emoji: '🌸', title: '最美校园', query: '校园里有什么好看的风景？' },
+    { emoji: '🍜', title: '食堂推荐', query: '食堂哪家好吃？' },
+];
+
+/**
+ * 夜猫子版建议问题（英文）
+ * 凌晨 2-8 点显示
+ */
+export const NIGHT_OWL_SUGGESTIONS: SuggestionCard[] = [
+    { emoji: '📖', title: 'Library Hours', query: "What time does the classroom close?" },
+    { emoji: '☕', title: 'Late Night Cafe', query: "Where can I grab a coffee on campus?" },
+    { emoji: '🛏️', title: 'Dorm Rules', query: "What are the dormitory quiet hours?" },
+    { emoji: '🚌', title: 'Night Bus', query: "Is there a night shuttle service?" },
+];
