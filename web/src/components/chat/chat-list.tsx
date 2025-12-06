@@ -68,8 +68,6 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
     // 彩蛋状态
     const [isEasterEgg, setIsEasterEgg] = useState(false);
     const [clickCount, setClickCount] = useState(0);
-    const [emojiAnimClass, setEmojiAnimClass] = useState('');
-    const clickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
     const emojiButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -87,17 +85,75 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
     // 当前显示的 Emoji（彩蛋模式显示 ❓）
     const currentEmoji = isEasterEgg ? easterEggEmoji : timeEmoji;
 
-    // 点击动效 class 映射
-    const getClickAnimClass = useCallback((emoji: string) => {
-        const animMap: Record<string, string> = {
-            '☀️': 'emoji-click-sun',
-            '☕': 'emoji-click-coffee',
-            '🌙': 'emoji-click-moon',
-            '🦉': 'emoji-click-owl',
-            '❤️': 'emoji-click-heart',
-            '❓': 'emoji-click-heart',  // 问号用心跳效果
+    // 点击动效配置（使用 Web Animations API）
+    const getClickAnimation = useCallback((emoji: string): KeyframeAnimationOptions & { keyframes: Keyframe[] } => {
+        const animations: Record<string, { keyframes: Keyframe[]; options: KeyframeAnimationOptions }> = {
+            '☀️': {  // 太阳：旋转 + 放大
+                keyframes: [
+                    { transform: 'scale(1) rotate(0deg)' },
+                    { transform: 'scale(1.3) rotate(180deg)' },
+                    { transform: 'scale(1) rotate(360deg)' },
+                ],
+                options: { duration: 600, easing: 'ease-out' },
+            },
+            '☕': {  // 咖啡：上下晃动
+                keyframes: [
+                    { transform: 'translateY(0) rotate(0deg)' },
+                    { transform: 'translateY(-4px) rotate(-10deg)' },
+                    { transform: 'translateY(-4px) rotate(10deg)' },
+                    { transform: 'translateY(0) rotate(0deg)' },
+                ],
+                options: { duration: 500, easing: 'ease-in-out' },
+            },
+            '🌙': {  // 月亮：左右摇摆
+                keyframes: [
+                    { transform: 'rotate(0deg)' },
+                    { transform: 'rotate(-15deg)' },
+                    { transform: 'rotate(15deg)' },
+                    { transform: 'rotate(0deg)' },
+                ],
+                options: { duration: 500, easing: 'ease-in-out' },
+            },
+            '🦉': {  // 猫头鹰：左右看
+                keyframes: [
+                    { transform: 'scaleX(1)' },
+                    { transform: 'scaleX(-1)' },
+                    { transform: 'scaleX(1)' },
+                ],
+                options: { duration: 400, easing: 'ease-in-out' },
+            },
+            '❤️': {  // 爱心：心跳
+                keyframes: [
+                    { transform: 'scale(1)' },
+                    { transform: 'scale(1.2)' },
+                    { transform: 'scale(1)' },
+                    { transform: 'scale(1.2)' },
+                    { transform: 'scale(1)' },
+                ],
+                options: { duration: 600, easing: 'ease-in-out' },
+            },
+            '❓': {  // 问号：心跳
+                keyframes: [
+                    { transform: 'scale(1)' },
+                    { transform: 'scale(1.2)' },
+                    { transform: 'scale(1)' },
+                    { transform: 'scale(1.2)' },
+                    { transform: 'scale(1)' },
+                ],
+                options: { duration: 600, easing: 'ease-in-out' },
+            },
         };
-        return animMap[emoji] || 'emoji-idle';
+        const defaultAnim = {  // 空闲：轻微抖动
+            keyframes: [
+                { transform: 'rotate(0deg)' },
+                { transform: 'rotate(-5deg)' },
+                { transform: 'rotate(5deg)' },
+                { transform: 'rotate(0deg)' },
+            ],
+            options: { duration: 500, easing: 'ease-in-out' },
+        };
+        const anim = animations[emoji] || defaultAnim;
+        return { keyframes: anim.keyframes, ...anim.options };
     }, []);
 
     // 时间段渐变色映射
@@ -121,18 +177,12 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
 
     // 点击 Emoji 处理
     const handleEmojiClick = useCallback(() => {
-        // 播放点击动效（使用 ref + 强制 reflow）
-        const animClass = getClickAnimClass(currentEmoji);
-        console.log('[EasterEgg] Click! emoji:', currentEmoji, 'animClass:', animClass);
+        // 播放点击动效（使用 Web Animations API）
+        console.log('[EasterEgg] Click! emoji:', currentEmoji);
 
         if (emojiButtonRef.current) {
-            const btn = emojiButtonRef.current;
-            // 移除现有动画 class
-            btn.classList.remove('emoji-idle', 'emoji-click-sun', 'emoji-click-coffee', 'emoji-click-moon', 'emoji-click-owl', 'emoji-click-heart');
-            // 强制 reflow，让浏览器重新计算
-            void btn.offsetWidth;
-            // 添加新动画 class
-            btn.classList.add(animClass);
+            const { keyframes, ...options } = getClickAnimation(currentEmoji);
+            emojiButtonRef.current.animate(keyframes, options);
         }
 
         // 累加点击计数（使用函数式更新避免闭包问题）
@@ -148,21 +198,26 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
             }
             return newCount;
         });
-    }, [getClickAnimClass, currentEmoji, isEasterEgg, transitionTo]);
+    }, [getClickAnimation, currentEmoji, isEasterEgg, transitionTo]);
 
-    // 空闲时自动播放报动动效
+    // 空闲动效配置
+    const idleAnimation = useMemo(() => ({
+        keyframes: [
+            { transform: 'rotate(0deg)' },
+            { transform: 'rotate(-5deg)' },
+            { transform: 'rotate(5deg)' },
+            { transform: 'rotate(0deg)' },
+        ],
+        options: { duration: 500, easing: 'ease-in-out' } as KeyframeAnimationOptions,
+    }), []);
+
+    // 空闲时自动播放动效
     useEffect(() => {
         if (isTyping || isDeleting) return;  // 打字过程中不播放
 
         const playIdleAnim = () => {
             if (emojiButtonRef.current) {
-                const btn = emojiButtonRef.current;
-                // 移除现有动画 class
-                btn.classList.remove('emoji-idle', 'emoji-click-sun', 'emoji-click-coffee', 'emoji-click-moon', 'emoji-click-owl', 'emoji-click-heart');
-                // 强制 reflow
-                void btn.offsetWidth;
-                // 添加空闲动画 class
-                btn.classList.add('emoji-idle');
+                emojiButtonRef.current.animate(idleAnimation.keyframes, idleAnimation.options);
             }
         };
 
@@ -172,7 +227,7 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
         return () => {
             if (idleTimerRef.current) clearInterval(idleTimerRef.current);
         };
-    }, [isTyping, isDeleting]);
+    }, [isTyping, isDeleting, idleAnimation]);
 
     // 空状态：展示欢迎语和建议卡片
     if (messages.length === 0 && !isLoading) {
