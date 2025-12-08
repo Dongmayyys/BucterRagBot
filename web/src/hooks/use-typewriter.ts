@@ -146,11 +146,11 @@ export function getTimeOfDay(): TimeOfDay {
 export function getGreeting(timeOfDay: TimeOfDay): string {
     switch (timeOfDay) {
         case 'morning':
-            return '早上好，巴克特';
+            return '早上好, Bucter';
         case 'afternoon':
-            return '下午好，巴克特';
+            return '下午好, Bucter';
         case 'evening':
-            return '晚上好，巴克特';
+            return '晚上好, Bucter';
         case 'night':
             return 'Hi, Bucter';
     }

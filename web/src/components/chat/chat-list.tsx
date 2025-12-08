@@ -57,10 +57,10 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
     const greeting = useMemo(() => getGreeting(timeOfDay), [timeOfDay]);
     const subtitle = useMemo(() => getSubtitle(timeOfDay), [timeOfDay]);
 
-    // 彩蛋欢迎语（❓ 作为末尾 emoji，不在文字中）
-    const easterEggGreeting = 'I ❤️ BUCT';
-    const easterEggSubtitle = '您发现了隐藏彩蛋！';
-    const easterEggEmoji = '❓';
+    // 彩蛋欢迎语（❤️ 作为末尾 emoji）
+    const easterEggGreeting = 'Welcome to BUCT';
+    const easterEggSubtitle = 'You found a hidden easter egg!';
+    const easterEggEmoji = '❤️';
 
     // 打字机效果（支持切换）
     const { displayText, isTyping, isDeleting, transitionTo } = useTypewriterWithTransition(greeting, 80);
@@ -70,6 +70,7 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
     const [clickCount, setClickCount] = useState(0);
     const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
     const emojiButtonRef = useRef<HTMLButtonElement>(null);
+    const lastClickTimeRef = useRef<number>(0);  // 记录最后点击时间
 
     // 时间段 Emoji 映射
     const timeEmoji = useMemo(() => {
@@ -168,6 +169,18 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
         return gradientMap[timeOfDay];
     }, [timeOfDay, isEasterEgg]);
 
+    // 光标颜色映射（与渐变色保持一致）
+    const cursorColor = useMemo(() => {
+        if (isEasterEgg) return 'bg-pink-500';
+        const colorMap: Record<TimeOfDay, string> = {
+            morning: 'bg-orange-500',
+            afternoon: 'bg-amber-600',
+            evening: 'bg-violet-600',
+            night: 'bg-indigo-600',
+        };
+        return colorMap[timeOfDay];
+    }, [timeOfDay, isEasterEgg]);
+
     // 当前显示的建议气泡（彩蛋 > 夜猫子 > 默认）
     const currentSuggestions = useMemo(() => {
         if (isEasterEgg) return EASTER_EGG_SUGGESTIONS;
@@ -183,6 +196,7 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
         if (emojiButtonRef.current) {
             const { keyframes, ...options } = getClickAnimation(currentEmoji);
             emojiButtonRef.current.animate(keyframes, options);
+            lastClickTimeRef.current = Date.now();  // 记录点击时间
         }
 
         // 累加点击计数（使用函数式更新避免闭包问题）
@@ -216,6 +230,9 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
         if (isTyping || isDeleting) return;  // 打字过程中不播放
 
         const playIdleAnim = () => {
+            // 点击后 1 秒内跳过空闲动效，避免冲突
+            if (Date.now() - lastClickTimeRef.current < 1000) return;
+
             if (emojiButtonRef.current) {
                 emojiButtonRef.current.animate(idleAnimation.keyframes, idleAnimation.options);
             }
@@ -240,7 +257,7 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
                             {displayText}
                         </span>
                         {(isTyping || isDeleting) ? (
-                            <span className="inline-block w-1 h-8 bg-violet-500 animate-pulse rounded-full" />
+                            <span className={`inline-block w-1 h-8 ${cursorColor} animate-pulse rounded-full`} />
                         ) : (
                             <button
                                 ref={emojiButtonRef}
