@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "校园智能问答 | Campus AI",
-  description: "基于 RAG 的校园知识问答系统，快速查询学校规章制度、服务设施等信息",
+  title: "巴克特 | 北化校园生活指南",
+  description: "基于 RAG 的北京化工大学校园知识问答系统，快速查询学校规章制度、服务设施等信息",
 };
 
 export default function RootLayout({

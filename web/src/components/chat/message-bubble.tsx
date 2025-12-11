@@ -2,7 +2,7 @@
 
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { User, Bot } from 'lucide-react';
+import { User, Bot, BotOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ChatMessage, Citation } from '@/lib/types';
 import { SourceBubble } from './source-bubble';
@@ -37,8 +37,17 @@ export function MessageBubble({ message, isStreaming, phase = 'idle', hasResults
         >
             {/* AI 头像 (左侧) */}
             {!isUser && (
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center shadow-md">
-                    <Bot className="w-4 h-4 text-white" />
+                <div className={cn(
+                    'flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center shadow-md',
+                    phase === 'error'
+                        ? 'bg-gradient-to-br from-red-500 to-rose-600'  // 报错时红色
+                        : 'bg-gradient-to-br from-violet-500 to-purple-600'
+                )}>
+                    {phase === 'error' ? (
+                        <BotOff className="w-4 h-4 text-white" />
+                    ) : (
+                        <Bot className="w-4 h-4 text-white" />
+                    )}
                 </div>
             )}
 

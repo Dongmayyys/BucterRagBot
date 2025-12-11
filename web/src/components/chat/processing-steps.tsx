@@ -20,7 +20,7 @@ import { cn } from '@/lib/utils';
  * - skipped：灰色圆圈带斜杠（闲聊时跳过）
  */
 
-export type ProcessingPhase = 'idle' | 'thinking' | 'searching' | 'organizing' | 'generating' | 'done';
+export type ProcessingPhase = 'idle' | 'thinking' | 'searching' | 'organizing' | 'generating' | 'done' | 'error';
 
 interface ProcessingStepsProps {
     phase: ProcessingPhase;
@@ -44,6 +44,11 @@ function getStepStatus(
     isChat: boolean,
     hasResults: boolean
 ): StepStatus {
+    // 错误状态：所有步骤都显示失败
+    if (phase === 'error') {
+        return 'failed';
+    }
+
     const phaseOrder: Record<ProcessingPhase, number> = {
         idle: -1,
         thinking: 0,
@@ -51,6 +56,7 @@ function getStepStatus(
         organizing: 2,
         generating: 3,
         done: 4,
+        error: -1,  // error 不参与顺序比较
     };
 
     const stepOrder: Record<StepKey, number> = {

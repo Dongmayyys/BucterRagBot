@@ -87,7 +87,7 @@ export default function ChatPage() {
       let buffer = '';
       let citations: Citation[] = [];
       let streamStarted = false;
-      let intent: 'query' | 'chat' = 'query';
+      let intent: 'query' | 'chat' | 'error' = 'query';  // ★ 添加 error 类型
 
       while (true) {
         const { done, value } = await reader.read();
@@ -108,15 +108,18 @@ export default function ChatPage() {
             setIsChat(intent === 'chat');
             setHasResults(citations.length > 0);
 
-            // ★ 根据意图设置阶段
-            if (intent === 'chat') {
+            // ★ 根据意图设置阶段（简化：直接用 intent 判断）
+            if (intent === 'error') {
+              // 错误：所有步骤显示失败
+              setPhase('error');
+            } else if (intent === 'chat') {
               // 闲聊：跳过查询和整理，直接进入生成
               setPhase('generating');
             } else if (citations.length === 0) {
-              // 无检索结果：跳过动画，直接 done（避免 setTimeout 时序问题）
+              // 无检索结果：跳过动画，直接 done
               setPhase('done');
             } else {
-              // 知识查询：显示查询阶段完成，进入整理（后端已完成，这里模拟进度）
+              // 知识查询：显示查询阶段完成，进入整理
               setPhase('searching');
               setTimeout(() => setPhase('organizing'), 100);
               setTimeout(() => setPhase('generating'), 200);
@@ -142,7 +145,10 @@ export default function ChatPage() {
         }
       }
 
-      setPhase('done');
+      // ★ 错误状态时保持 error phase，不覆盖
+      if (intent !== 'error') {
+        setPhase('done');
+      }
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
         console.log('[Frontend] Request aborted by user');

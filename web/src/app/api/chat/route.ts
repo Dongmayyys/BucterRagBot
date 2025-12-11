@@ -28,7 +28,7 @@ interface UIMessage {
     parts?: { type: string; text?: string }[];
 }
 
-type Intent = 'query' | 'chat';
+type Intent = 'query' | 'chat' | 'error';
 
 export async function POST(request: Request) {
     console.log('[API] Received chat request');
@@ -43,10 +43,7 @@ export async function POST(request: Request) {
         console.log('[API] Extracted query:', query);
 
         if (!query) {
-            return new Response(
-                JSON.stringify({ error: 'No text content in message' }),
-                { status: 400, headers: { 'Content-Type': 'application/json' } }
-            );
+            return createErrorStream('抱歉，消息内容为空 😅\n\n请输入您的问题。');
         }
 
         // ★ 1. 意图分类 + Query Rewriting（融合对话历史）
@@ -209,7 +206,7 @@ AI 服务器正在繁忙，请稍后重试。`
 
 请稍后重试。`;
 
-            return createErrorStream(intent, errorMessage);
+            return createErrorStream(errorMessage);
         }
         clearTimeout(timeoutId);
 
@@ -232,7 +229,7 @@ AI 服务有速率限制，请稍等片刻再试。`;
 建议开始新对话后重试。`;
             }
 
-            return createErrorStream(intent, userMessage);
+            return createErrorStream(userMessage);
         }
 
         // 6. 转换 SSE 流为纯文本流
@@ -296,10 +293,7 @@ AI 服务有速率限制，请稍等片刻再试。`;
         });
     } catch (error) {
         console.error('[API] Chat API error:', error);
-        return new Response(
-            JSON.stringify({ error: 'Internal server error', details: String(error) }),
-            { status: 500, headers: { 'Content-Type': 'application/json' } }
-        );
+        return createErrorStream('抱歉，服务器开小差了 😢\n\n请稍后重试，或联系管理员。');
     }
 }
 
@@ -454,11 +448,12 @@ async function rerank(
 /**
  * 创建错误消息流响应（用于向前端返回友好错误提示）
  */
-function createErrorStream(intent: Intent, message: string): Response {
+function createErrorStream(message: string): Response {
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
         start(controller) {
-            const headerLine = JSON.stringify({ intent, citations: [], error: true }) + '\n---STREAM_START---\n';
+            // ★ intent 直接设为 'error'，前端统一处理
+            const headerLine = JSON.stringify({ intent: 'error', citations: [] }) + '\n---STREAM_START---\n';
             controller.enqueue(encoder.encode(headerLine));
             controller.enqueue(encoder.encode(message));
             controller.close();
