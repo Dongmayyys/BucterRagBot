@@ -1,16 +1,29 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Github, Sun, Plus, ChevronLeft, ChevronRight, Download } from 'lucide-react';
+import { Sun, Plus, ChevronLeft, ChevronRight, Download, Upload, Heart, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+} from '@/components/ui/dialog';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Citation } from '@/lib/types';
 
 /**
  * 聊天布局组件 - 简化版
  * 
  * 结构：
- * - 顶部栏：GitHub + 标题 + 主题切换
+ * - 顶部栏：新对话 + 标题 + 功能按钮（主题/上传/致谢）
  * - 中部：聊天窗口 + 溯源面板（PC 右侧 / 手机弹窗）
  * - 底部：输入框
  */
@@ -26,6 +39,8 @@ interface ChatLayoutProps {
 export function ChatLayout({ children, selectedCitation, onCloseCitation, onNewChat, hasMessages = false }: ChatLayoutProps) {
     // 检测是否为移动端（< 768px）
     const [isMobile, setIsMobile] = useState(false);
+    // 致谢弹窗状态
+    const [showCredits, setShowCredits] = useState(false);
 
     useEffect(() => {
         const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -33,6 +48,13 @@ export function ChatLayout({ children, selectedCitation, onCloseCitation, onNewC
         window.addEventListener('resize', checkMobile);
         return () => window.removeEventListener('resize', checkMobile);
     }, []);
+
+    // 右上角按钮配置
+    const actionButtons = [
+        { icon: Sun, label: '主题切换', onClick: () => { }, disabled: true },
+        { icon: Upload, label: '上传资料', onClick: () => { }, disabled: true },
+        { icon: Heart, label: '致谢名单', onClick: () => setShowCredits(true), disabled: false },
+    ];
 
     return (
         <div className="flex h-screen bg-background">
@@ -60,21 +82,45 @@ export function ChatLayout({ children, selectedCitation, onCloseCitation, onNewC
                     {/* 中间：标题 */}
                     <h1 className="font-semibold text-lg absolute left-1/2 -translate-x-1/2">校园智能问答</h1>
 
-                    {/* 右侧：GitHub + 主题切换 */}
-                    <div className="flex items-center gap-1">
-                        <a
-                            href="https://github.com"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-2 rounded-lg hover:bg-muted transition-colors"
-                            title="查看源码"
-                        >
-                            <Github className="h-5 w-5" />
-                        </a>
-                        <Button variant="ghost" size="icon" disabled title="主题切换（开发中）">
-                            <Sun className="h-5 w-5" />
-                        </Button>
-                    </div>
+                    {/* 右侧：功能按钮 - PC 端直接显示，移动端用菜单 */}
+                    {isMobile ? (
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon">
+                                    <Menu className="h-5 w-5" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                {actionButtons.map((btn, idx) => (
+                                    <DropdownMenuItem
+                                        key={idx}
+                                        onClick={btn.onClick}
+                                        disabled={btn.disabled}
+                                        className="gap-2"
+                                    >
+                                        <btn.icon className="h-4 w-4" />
+                                        <span>{btn.label}</span>
+                                        {btn.disabled && <span className="text-xs text-muted-foreground ml-auto">开发中</span>}
+                                    </DropdownMenuItem>
+                                ))}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    ) : (
+                        <div className="flex items-center gap-1">
+                            {actionButtons.map((btn, idx) => (
+                                <Button
+                                    key={idx}
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={btn.onClick}
+                                    disabled={btn.disabled}
+                                    title={btn.disabled ? `${btn.label}（开发中）` : btn.label}
+                                >
+                                    <btn.icon className="h-5 w-5" />
+                                </Button>
+                            ))}
+                        </div>
+                    )}
                 </header>
 
                 {/* 聊天区域 */}
@@ -91,6 +137,45 @@ export function ChatLayout({ children, selectedCitation, onCloseCitation, onNewC
                     <SourcePanelContent citation={selectedCitation} />
                 </SheetContent>
             </Sheet>
+
+            {/* 致谢弹窗 */}
+            <Dialog open={showCredits} onOpenChange={setShowCredits}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Heart className="h-5 w-5 text-pink-500" />
+                            致谢名单
+                        </DialogTitle>
+                        <DialogDescription>
+                            感谢以下项目和个人的支持
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 text-sm">
+                        <div>
+                            <h4 className="font-medium mb-2">🛠 技术栈</h4>
+                            <ul className="list-disc list-inside text-muted-foreground space-y-1">
+                                <li>Next.js - React 框架</li>
+                                <li>Tailwind CSS - 样式框架</li>
+                                <li>SiliconFlow - AI 模型服务</li>
+                                <li>Supabase - 向量数据库</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h4 className="font-medium mb-2">💡 开源项目</h4>
+                            <ul className="list-disc list-inside text-muted-foreground space-y-1">
+                                <li>Lucide Icons - 图标库</li>
+                                <li>shadcn/ui - UI 组件库</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h4 className="font-medium mb-2">❤️ 特别感谢</h4>
+                            <p className="text-muted-foreground">
+                                感谢北京化工大学提供的知识资料支持
+                            </p>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
