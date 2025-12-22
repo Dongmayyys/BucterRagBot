@@ -25,9 +25,11 @@ import re
 import glob
 import argparse
 import numpy as np
-from typing import List, Tuple, Optional
+from pathlib import Path
+from typing import List, Tuple, Optional, Dict
 from abc import ABC, abstractmethod
 
+import fitz  # PyMuPDF - 用于提取页码和大纲
 import pymupdf4llm
 from dotenv import load_dotenv
 from langchain_openai import OpenAIEmbeddings
@@ -52,6 +54,173 @@ SILICONFLOW_API_KEY = os.getenv("SILICONFLOW_API_KEY")
 目标块大小 = 180      # 期望每个 Chunk 约 180 字符 (与 qa_regex 对齐)
 最小块长度 = 80       # 块长度低于此值会合并
 
+# 裁切参数
+DEFAULT_CROP_RATIO = 0.10  # 裁切顶部/底部各 10% 去除页眉页脚
+
+
+# ============================================================================
+# 页码与面包屑工具函数
+# ============================================================================
+
+def extract_toc_mapping(doc: fitz.Document) -> Dict[int, List[str]]:
+    """
+    从 PDF 大纲 (TOC) 构建页码到面包屑的映射
+    
+    Returns:
+        {page_number: ["章节", "小节", ...]}
+    """
+    toc = doc.get_toc()
+    if not toc:
+        return {}
+    
+    page_to_breadcrumb: Dict[int, List[str]] = {}
+    current_path: List[str] = []
+    
+    for level, title, target_page in toc:
+        while len(current_path) >= level:
+            current_path.pop()
+        current_path.append(title.strip())
+        page_to_breadcrumb[target_page] = current_path.copy()
+    
+    return page_to_breadcrumb
+
+
+def get_breadcrumb_for_page(
+    page_num: int, 
+    toc_mapping: Dict[int, List[str]],
+    doc_display_name: str
+) -> str:
+    """
+    获取指定页面的完整面包屑字符串
+    
+    格式: 【文档名 > 章节 > 小节】
+    """
+    if not toc_mapping:
+        return f"【{doc_display_name}】"
+    
+    valid_pages = [p for p in toc_mapping.keys() if p <= page_num]
+    if not valid_pages:
+        return f"【{doc_display_name}】"
+    
+    closest_page = max(valid_pages)
+    breadcrumb_parts = toc_mapping[closest_page]
+    
+    return f"【{doc_display_name} > {' > '.join(breadcrumb_parts)}】"
+
+
+def extract_pages_with_metadata(
+    pdf_path: str,
+    crop_ratio: float = DEFAULT_CROP_RATIO
+) -> Tuple[List[Dict], int, Dict[int, List[str]], str]:
+    """
+    从 PDF 提取每页文本，同时获取大纲信息
+    
+    Args:
+        pdf_path: PDF 文件路径
+        crop_ratio: 裁切比例 (上下各裁切)
+    
+    Returns:
+        (pages_data, total_pages, toc_mapping, display_name)
+    """
+    doc = fitz.open(pdf_path)
+    document_id = Path(pdf_path).stem
+    total_pages = len(doc)
+    
+    # 解析大纲
+    toc_mapping = extract_toc_mapping(doc)
+    
+    # 生成显示名 (去掉年份前缀等)
+    display_name = document_id.replace('-', ' ').strip()
+    
+    pages_data = []
+    
+    for page_num in range(total_pages):
+        page = doc[page_num]
+        page_number = page_num + 1  # 1-indexed
+        
+        # CropBox 裁切
+        page_rect = page.rect
+        margin = page_rect.height * crop_ratio
+        clip = fitz.Rect(0, margin, page_rect.width, page_rect.height - margin)
+        text = page.get_text("text", clip=clip).strip()
+        
+        pages_data.append({
+            "page_number": page_number,
+            "text": text,
+            "text_length": len(text)
+        })
+    
+    doc.close()
+    
+    return pages_data, total_pages, toc_mapping, display_name
+
+
+def build_position_to_page_map(pages_data: List[Dict]) -> Tuple[str, List[int]]:
+    """
+    合并全文并建立字符位置到页码的映射
+    
+    Returns:
+        (full_text, position_to_page)
+        position_to_page[i] = 第 i 个字符所在的页码
+    """
+    full_text = ""
+    position_to_page = []
+    
+    for page in pages_data:
+        start_pos = len(full_text)
+        full_text += page["text"] + "\n\n"
+        end_pos = len(full_text)
+        
+        for _ in range(start_pos, end_pos):
+            position_to_page.append(page["page_number"])
+    
+    return full_text, position_to_page
+
+
+def get_page_for_position(position: int, position_to_page: List[int]) -> int:
+    """根据字符位置获取页码"""
+    if not position_to_page:
+        return 1
+    if position < 0:
+        return position_to_page[0] if position_to_page else 1
+    if position >= len(position_to_page):
+        return position_to_page[-1] if position_to_page else 1
+    return position_to_page[position]
+
+
+# ============================================================================
+# PDF 上下文 (传递给策略类的元数据)
+# ============================================================================
+
+class PDFContext:
+    """PDF 文档上下文，携带页码和面包屑信息"""
+    
+    def __init__(
+        self,
+        filename: str,
+        document_id: str,
+        display_name: str,
+        total_pages: int,
+        full_text: str,
+        position_to_page: List[int],
+        toc_mapping: Dict[int, List[str]]
+    ):
+        self.filename = filename
+        self.document_id = document_id
+        self.display_name = display_name
+        self.total_pages = total_pages
+        self.full_text = full_text
+        self.position_to_page = position_to_page
+        self.toc_mapping = toc_mapping
+    
+    def get_page_for_position(self, position: int) -> int:
+        """根据字符位置获取页码"""
+        return get_page_for_position(position, self.position_to_page)
+    
+    def get_breadcrumb(self, page_num: int) -> str:
+        """获取页面的面包屑"""
+        return get_breadcrumb_for_page(page_num, self.toc_mapping, self.display_name)
+
 
 # ============================================================================
 # 分块策略基类
@@ -68,8 +237,15 @@ class ChunkStrategy(ABC):
         pass
     
     @abstractmethod
-    def split(self, text: str, filename: str) -> List[Document]:
-        """执行分块"""
+    def split(self, text: str, filename: str, ctx: Optional['PDFContext'] = None) -> List[Document]:
+        """
+        执行分块
+        
+        Args:
+            text: 全文内容
+            filename: 文件名
+            ctx: PDF 上下文 (含页码、面包屑等)
+        """
         pass
 
 
@@ -81,61 +257,89 @@ class QARegexStrategy(ChunkStrategy):
     """
     Q&A 问答式文档切分策略
     
-    适用于: 格式为 "**1. 问题标题**" 的文档
+    适用于: 
+    - 格式为 "1. 什么是...？" 的问答文档
+    - 格式为 "**1. 问题标题**" 的 Markdown 文档
     """
     
     name = "qa_regex"
-    pattern = r'(\n\*\*\d+\.\s+)'
+    # 匹配: 换行 + 数字 + . + 空格 + 中文(问题开头)
+    # 排除: 小数(如1.5)、编号列表(如1.1)
+    pattern = r'(\n\d+\.\s+(?=[\u4e00-\u9fa5]))'
     
     def detect(self, text: str) -> bool:
         """检测是否包含 Q&A 格式标记"""
-        matches = re.findall(r'\*\*\d+\.', text)
+        # 匹配问题格式: 数字. + 中文问句词（什么/如何/怎样/哪些/可以/是否）
+        matches = re.findall(r'\n\d+\.\s+(什么|如何|怎样|怎么|哪些|可以|是否|为什么|能否|需要)', text)
         return len(matches) >= 5  # 至少有 5 个问题才认为是 Q&A 格式
     
-    def split(self, text: str, filename: str) -> List[Document]:
-        """按 Q&A 边界切分"""
+    def split(self, text: str, filename: str, ctx: Optional[PDFContext] = None) -> List[Document]:
+        """按 Q&A 边界切分，附加页码和面包屑"""
         parts = re.split(self.pattern, text)
         chunks = []
         chunk_index = 0
+        current_pos = 0
         
-        # 从文件名提取 document_id（去掉 .pdf 后缀）
+        # 从文件名提取 document_id
         document_id = filename.replace('.pdf', '')
+        total_pages = ctx.total_pages if ctx else 1
         
         # 前言/目录部分
         if parts[0].strip():
+            intro_text = parts[0].strip()
+            page_num = ctx.get_page_for_position(0) if ctx else 1
+            breadcrumb = ctx.get_breadcrumb(page_num) if ctx else f"【{document_id}】"
+            
             chunks.append(Document(
-                page_content="【前言/目录】\n" + parts[0].strip(),
+                page_content=f"{breadcrumb}\n\n【前言/目录】\n{intro_text}",
                 metadata={
                     "source": filename, 
                     "type": "intro", 
                     "strategy": self.name,
                     "document_id": document_id,
-                    "chunk_index": chunk_index
+                    "chunk_index": chunk_index,
+                    "page_number": page_num,
+                    "total_pages": total_pages,
+                    "breadcrumb": breadcrumb
                 }
             ))
             chunk_index += 1
+            current_pos = len(parts[0])
         
         # 问答对
         for i in range(1, len(parts), 2):
             header = parts[i]
             content = parts[i+1] if i+1 < len(parts) else ""
-            full_text = header.strip() + content.strip()
+            full_chunk = header.strip() + content.strip()
+            
+            # 计算页码
+            chunk_start_pos = text.find(header, current_pos)
+            if ctx and chunk_start_pos >= 0:
+                page_num = ctx.get_page_for_position(chunk_start_pos)
+                breadcrumb = ctx.get_breadcrumb(page_num)
+            else:
+                page_num = 1
+                breadcrumb = f"【{document_id}】"
             
             # 提取问题标题
-            lines = full_text.split('\n')
+            lines = full_chunk.split('\n')
             title = lines[0].replace('**', '').strip()
             
             chunks.append(Document(
-                page_content=full_text,
+                page_content=f"{breadcrumb}\n\n{full_chunk}",
                 metadata={
                     "source": filename,
                     "title": title,
                     "strategy": self.name,
                     "document_id": document_id,
-                    "chunk_index": chunk_index
+                    "chunk_index": chunk_index,
+                    "page_number": page_num,
+                    "total_pages": total_pages,
+                    "breadcrumb": breadcrumb
                 }
             ))
             chunk_index += 1
+            current_pos = chunk_start_pos + len(header) + len(content)
         
         return chunks
 
@@ -162,39 +366,68 @@ class TitleHierarchyStrategy(ChunkStrategy):
                 return True
         return False
     
-    def split(self, text: str, filename: str) -> List[Document]:
-        """按标题层级切分 (优先按条切分)"""
-        # 优先按"条"切分，因为每条通常是一个独立的规定
+    def split(self, text: str, filename: str, ctx: Optional[PDFContext] = None) -> List[Document]:
+        """按标题层级切分 (优先按条切分)，附加页码和面包屑"""
         pattern = r'(第[一二三四五六七八九十百零]+条)'
         parts = re.split(pattern, text)
         chunks = []
+        chunk_index = 0
+        current_pos = 0
+        
+        document_id = filename.replace('.pdf', '')
+        total_pages = ctx.total_pages if ctx else 1
         
         # 前言部分
         if parts[0].strip() and len(parts[0].strip()) > 50:
+            page_num = ctx.get_page_for_position(0) if ctx else 1
+            breadcrumb = ctx.get_breadcrumb(page_num) if ctx else f"【{document_id}】"
+            
             chunks.append(Document(
-                page_content=parts[0].strip(),
+                page_content=f"{breadcrumb}\n\n{parts[0].strip()}",
                 metadata={
                     "source": filename,
                     "type": "intro",
-                    "strategy": self.name
+                    "strategy": self.name,
+                    "document_id": document_id,
+                    "chunk_index": chunk_index,
+                    "page_number": page_num,
+                    "total_pages": total_pages,
+                    "breadcrumb": breadcrumb
                 }
             ))
+            chunk_index += 1
+            current_pos = len(parts[0])
         
         # 按条组合
         for i in range(1, len(parts), 2):
             header = parts[i]
             content = parts[i+1] if i+1 < len(parts) else ""
-            full_text = header + content.strip()
+            full_chunk = header + content.strip()
             
-            if len(full_text.strip()) > 20:
+            if len(full_chunk.strip()) > 20:
+                chunk_start_pos = text.find(header, current_pos)
+                if ctx and chunk_start_pos >= 0:
+                    page_num = ctx.get_page_for_position(chunk_start_pos)
+                    breadcrumb = ctx.get_breadcrumb(page_num)
+                else:
+                    page_num = 1
+                    breadcrumb = f"【{document_id}】"
+                
                 chunks.append(Document(
-                    page_content=full_text.strip(),
+                    page_content=f"{breadcrumb}\n\n{full_chunk.strip()}",
                     metadata={
                         "source": filename,
                         "title": header,
-                        "strategy": self.name
+                        "strategy": self.name,
+                        "document_id": document_id,
+                        "chunk_index": chunk_index,
+                        "page_number": page_num,
+                        "total_pages": total_pages,
+                        "breadcrumb": breadcrumb
                     }
                 ))
+                chunk_index += 1
+                current_pos = chunk_start_pos + len(header) + len(content)
         
         return chunks
 
@@ -279,17 +512,29 @@ class SemanticChunkStrategy(ChunkStrategy):
         
         return 合并后列表
     
-    def split(self, text: str, filename: str) -> List[Document]:
-        """执行语义切分"""
+    def split(self, text: str, filename: str, ctx: Optional[PDFContext] = None) -> List[Document]:
+        """执行语义切分 (暂不支持页码映射)"""
         if self.embeddings is None:
             raise ValueError("语义切分需要提供 embeddings 模型")
+        
+        document_id = filename.replace('.pdf', '')
+        total_pages = ctx.total_pages if ctx else 1
         
         段落列表 = self._分段落(text)
         
         if len(段落列表) <= 1:
+            breadcrumb = ctx.get_breadcrumb(1) if ctx else f"【{document_id}】"
             return [Document(
-                page_content=text,
-                metadata={"source": filename, "strategy": self.name}
+                page_content=f"{breadcrumb}\n\n{text}",
+                metadata={
+                    "source": filename, 
+                    "strategy": self.name,
+                    "document_id": document_id,
+                    "chunk_index": 0,
+                    "page_number": 1,
+                    "total_pages": total_pages,
+                    "breadcrumb": breadcrumb
+                }
             )]
         
         # 批量计算 Embedding
@@ -337,14 +582,25 @@ class SemanticChunkStrategy(ChunkStrategy):
         最终块列表 = self._合并小块(原始块列表)
         
         # 转换为 Document
+        document_id = filename.replace('.pdf', '')
+        total_pages = ctx.total_pages if ctx else 1
+        
         chunks = []
         for i, 块 in enumerate(最终块列表):
+            # 语义切分暂时使用第一页作为默认页码
+            page_num = 1
+            breadcrumb = ctx.get_breadcrumb(page_num) if ctx else f"【{document_id}】"
+            
             chunks.append(Document(
-                page_content=块,
+                page_content=f"{breadcrumb}\n\n{块}",
                 metadata={
                     "source": filename,
                     "chunk_index": i,
-                    "strategy": self.name
+                    "strategy": self.name,
+                    "document_id": document_id,
+                    "page_number": page_num,
+                    "total_pages": total_pages,
+                    "breadcrumb": breadcrumb
                 }
             ))
         
@@ -376,18 +632,28 @@ class BaselineStrategy(ChunkStrategy):
         """固定切分总是可用"""
         return True
     
-    def split(self, text: str, filename: str) -> List[Document]:
-        """执行固定窗口切分"""
+    def split(self, text: str, filename: str, ctx: Optional[PDFContext] = None) -> List[Document]:
+        """执行固定窗口切分 (暂不支持页码映射)"""
         texts = self.splitter.split_text(text)
         chunks = []
         
+        document_id = filename.replace('.pdf', '')
+        total_pages = ctx.total_pages if ctx else 1
+        
         for i, t in enumerate(texts):
+            page_num = 1
+            breadcrumb = ctx.get_breadcrumb(page_num) if ctx else f"【{document_id}】"
+            
             chunks.append(Document(
-                page_content=t,
+                page_content=f"{breadcrumb}\n\n{t}",
                 metadata={
                     "source": filename,
                     "chunk_index": i,
-                    "strategy": self.name
+                    "strategy": self.name,
+                    "document_id": document_id,
+                    "page_number": page_num,
+                    "total_pages": total_pages,
+                    "breadcrumb": breadcrumb
                 }
             ))
         
@@ -401,6 +667,7 @@ class BaselineStrategy(ChunkStrategy):
 def auto_detect_and_chunk(
     text: str, 
     filename: str, 
+    ctx: Optional[PDFContext] = None,
     embeddings: Optional[OpenAIEmbeddings] = None
 ) -> Tuple[List[Document], str]:
     """
@@ -419,24 +686,24 @@ def auto_detect_and_chunk(
     qa_strategy = QARegexStrategy()
     if qa_strategy.detect(text):
         print(f"   检测到 Q&A 格式，使用正则切分")
-        return qa_strategy.split(text, filename), qa_strategy.name
+        return qa_strategy.split(text, filename, ctx), qa_strategy.name
     
     # Layer 1: 尝试标题层级
     title_strategy = TitleHierarchyStrategy()
     if title_strategy.detect(text):
         print(f"   检测到标题层级格式，使用标题切分")
-        return title_strategy.split(text, filename), title_strategy.name
+        return title_strategy.split(text, filename, ctx), title_strategy.name
     
     # Layer 2: 语义切分 (如果有 embeddings)
     if embeddings is not None:
         print(f"   未检测到结构化格式，使用语义切分")
         semantic_strategy = SemanticChunkStrategy(embeddings)
-        return semantic_strategy.split(text, filename), semantic_strategy.name
+        return semantic_strategy.split(text, filename, ctx), semantic_strategy.name
     
     # Layer 3: 固定窗口兜底
     print(f"   使用固定窗口切分 (兜底)")
     baseline_strategy = BaselineStrategy()
-    return baseline_strategy.split(text, filename), baseline_strategy.name
+    return baseline_strategy.split(text, filename, ctx), baseline_strategy.name
 
 
 # ============================================================================
@@ -489,25 +756,43 @@ def process_and_upload(strategy: str = "auto", dry_run: bool = True):
     
     for pdf_path in pdf_files:
         print(f"\n处理: {pdf_path}")
-        raw_md = pymupdf4llm.to_markdown(pdf_path)
-        clean_md = clean_markdown(raw_md)
-        
         filename = os.path.basename(pdf_path)
+        document_id = Path(pdf_path).stem
+        
+        # 使用 CropBox 提取每页文本并建立页码映射
+        pages_data, total_pages, toc_mapping, display_name = extract_pages_with_metadata(pdf_path)
+        full_text, position_to_page = build_position_to_page_map(pages_data)
+        
+        # 清洗文本
+        clean_text = clean_markdown(full_text)
+        
+        # 创建 PDF 上下文
+        ctx = PDFContext(
+            filename=filename,
+            document_id=document_id,
+            display_name=display_name,
+            total_pages=total_pages,
+            full_text=clean_text,
+            position_to_page=position_to_page,
+            toc_mapping=toc_mapping
+        )
+        
+        print(f"   总页数: {total_pages}, 大纲章节: {len(toc_mapping)}")
         
         # 根据策略选择切分方法
         if strategy == "auto":
-            docs, used_strategy = auto_detect_and_chunk(clean_md, filename, embeddings)
+            docs, used_strategy = auto_detect_and_chunk(clean_text, filename, ctx, embeddings)
         elif strategy == "qa":
-            docs = QARegexStrategy().split(clean_md, filename)
+            docs = QARegexStrategy().split(clean_text, filename, ctx)
             used_strategy = "qa_regex"
         elif strategy == "title":
-            docs = TitleHierarchyStrategy().split(clean_md, filename)
+            docs = TitleHierarchyStrategy().split(clean_text, filename, ctx)
             used_strategy = "title_hierarchy"
         elif strategy == "semantic":
-            docs = SemanticChunkStrategy(embeddings).split(clean_md, filename)
+            docs = SemanticChunkStrategy(embeddings).split(clean_text, filename, ctx)
             used_strategy = "semantic"
         elif strategy == "baseline":
-            docs = BaselineStrategy().split(clean_md, filename)
+            docs = BaselineStrategy().split(clean_text, filename, ctx)
             used_strategy = "baseline"
         else:
             raise ValueError(f"未知策略: {strategy}")
