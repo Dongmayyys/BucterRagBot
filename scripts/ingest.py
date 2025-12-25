@@ -59,8 +59,12 @@ DEFAULT_CROP_RATIO = 0.10  # 裁切顶部/底部各 10% 去除页眉页脚
 
 
 # ============================================================================
-# 页码与面包屑工具函数
+# 页码与面包屑工具函数 (锚点注入方案)
 # ============================================================================
+
+# 锚点格式：使用不常见字符组合
+PAGE_ANCHOR_PATTERN = r'<<<P:(\d+)>>>'
+
 
 def extract_toc_mapping(doc: fitz.Document) -> Dict[int, List[str]]:
     """
@@ -98,6 +102,7 @@ def get_breadcrumb_for_page(
     if not toc_mapping:
         return f"【{doc_display_name}】"
     
+    # 找到 <= page_num 的最大页码
     valid_pages = [p for p in toc_mapping.keys() if p <= page_num]
     if not valid_pages:
         return f"【{doc_display_name}】"
@@ -108,19 +113,19 @@ def get_breadcrumb_for_page(
     return f"【{doc_display_name} > {' > '.join(breadcrumb_parts)}】"
 
 
-def extract_pages_with_metadata(
+def extract_pages_with_anchors(
     pdf_path: str,
     crop_ratio: float = DEFAULT_CROP_RATIO
-) -> Tuple[List[Dict], int, Dict[int, List[str]], str]:
+) -> Tuple[str, int, Dict[int, List[str]], str]:
     """
-    从 PDF 提取每页文本，同时获取大纲信息
+    从 PDF 提取文本，注入页码锚点
     
     Args:
         pdf_path: PDF 文件路径
         crop_ratio: 裁切比例 (上下各裁切)
     
     Returns:
-        (pages_data, total_pages, toc_mapping, display_name)
+        (full_text_with_anchors, total_pages, toc_mapping, display_name)
     """
     doc = fitz.open(pdf_path)
     document_id = Path(pdf_path).stem
@@ -129,11 +134,11 @@ def extract_pages_with_metadata(
     # 解析大纲
     toc_mapping = extract_toc_mapping(doc)
     
-    # 生成显示名 (去掉年份前缀等)
+    # 生成显示名
     display_name = document_id.replace('-', ' ').strip()
     
-    pages_data = []
-    
+    # 逐页提取并注入锚点
+    full_text = ""
     for page_num in range(total_pages):
         page = doc[page_num]
         page_number = page_num + 1  # 1-indexed
@@ -144,56 +149,65 @@ def extract_pages_with_metadata(
         clip = fitz.Rect(0, margin, page_rect.width, page_rect.height - margin)
         text = page.get_text("text", clip=clip).strip()
         
-        pages_data.append({
-            "page_number": page_number,
-            "text": text,
-            "text_length": len(text)
-        })
+        # 注入锚点：在每页开头插入标记
+        anchor = f"<<<P:{page_number}>>>"
+        full_text += anchor + text + "\n\n"
     
     doc.close()
     
-    return pages_data, total_pages, toc_mapping, display_name
+    return full_text, total_pages, toc_mapping, display_name
 
 
-def build_position_to_page_map(pages_data: List[Dict]) -> Tuple[str, List[int]]:
+def parse_anchors_from_chunk(chunk: str) -> Tuple[int, int, str]:
     """
-    合并全文并建立字符位置到页码的映射
+    从 chunk 中解析锚点，返回当前页码和下一状态页码
+    
+    使用"首位优先 + 延迟更新"状态机逻辑：
+    - 如果锚点在开头 (pos=0)，立即更新页码
+    - 如果锚点在中间，当前 chunk 仍属于上一页
+    - 处理完后，状态更新为最后一个锚点的页码
+    
+    Args:
+        chunk: 包含锚点的文本块
     
     Returns:
-        (full_text, position_to_page)
-        position_to_page[i] = 第 i 个字符所在的页码
+        (current_page, next_page_state, clean_text)
+        - current_page: 用于判定本 chunk 归属，若无锚点返回 -1 表示使用外部状态
+        - next_page_state: 下一个 chunk 的初始状态，若无锚点返回 -1
+        - clean_text: 清除锚点后的文本
     """
-    full_text = ""
-    position_to_page = []
+    anchors = re.findall(PAGE_ANCHOR_PATTERN, chunk)
     
-    for page in pages_data:
-        start_pos = len(full_text)
-        full_text += page["text"] + "\n\n"
-        end_pos = len(full_text)
-        
-        for _ in range(start_pos, end_pos):
-            position_to_page.append(page["page_number"])
+    if not anchors:
+        # 无锚点，返回 -1 表示使用外部状态
+        return -1, -1, chunk
     
-    return full_text, position_to_page
-
-
-def get_page_for_position(position: int, position_to_page: List[int]) -> int:
-    """根据字符位置获取页码"""
-    if not position_to_page:
-        return 1
-    if position < 0:
-        return position_to_page[0] if position_to_page else 1
-    if position >= len(position_to_page):
-        return position_to_page[-1] if position_to_page else 1
-    return position_to_page[position]
+    # 找第一个锚点的位置
+    first_anchor = f"<<<P:{anchors[0]}>>>"
+    first_anchor_pos = chunk.find(first_anchor)
+    
+    if first_anchor_pos == 0:
+        # 锚点在开头，立即更新
+        current_page = int(anchors[0])
+    else:
+        # 锚点在中间，当前 chunk 仍属于上一页 (返回 -1 表示使用外部状态)
+        current_page = -1
+    
+    # 下一状态：最后一个锚点的页码
+    next_page_state = int(anchors[-1])
+    
+    # 清除所有锚点
+    clean_text = re.sub(PAGE_ANCHOR_PATTERN, '', chunk)
+    
+    return current_page, next_page_state, clean_text
 
 
 # ============================================================================
-# PDF 上下文 (传递给策略类的元数据)
+# 语义流上下文 (传递给后处理器的元数据)
 # ============================================================================
 
-class PDFContext:
-    """PDF 文档上下文，携带页码和面包屑信息"""
+class SemanticContext:
+    """语义流上下文，存储文档元信息"""
     
     def __init__(
         self,
@@ -201,21 +215,13 @@ class PDFContext:
         document_id: str,
         display_name: str,
         total_pages: int,
-        full_text: str,
-        position_to_page: List[int],
         toc_mapping: Dict[int, List[str]]
     ):
         self.filename = filename
         self.document_id = document_id
         self.display_name = display_name
         self.total_pages = total_pages
-        self.full_text = full_text
-        self.position_to_page = position_to_page
         self.toc_mapping = toc_mapping
-    
-    def get_page_for_position(self, position: int) -> int:
-        """根据字符位置获取页码"""
-        return get_page_for_position(position, self.position_to_page)
     
     def get_breadcrumb(self, page_num: int) -> str:
         """获取页面的面包屑"""
@@ -237,14 +243,14 @@ class ChunkStrategy(ABC):
         pass
     
     @abstractmethod
-    def split(self, text: str, filename: str, ctx: Optional['PDFContext'] = None) -> List[Document]:
+    def split(self, text: str, filename: str, ctx: Optional['SemanticContext'] = None) -> List[Document]:
         """
-        执行分块
+        执行分块 (使用锚点状态机处理页码)
         
         Args:
-            text: 全文内容
+            text: 带锚点的全文 (<<<P:n>>>)
             filename: 文件名
-            ctx: PDF 上下文 (含页码、面包屑等)
+            ctx: 语义上下文 (含 toc_mapping 等)
         """
         pass
 
@@ -273,60 +279,98 @@ class QARegexStrategy(ChunkStrategy):
         matches = re.findall(r'\n\d+\.\s+(什么|如何|怎样|怎么|哪些|可以|是否|为什么|能否|需要)', text)
         return len(matches) >= 5  # 至少有 5 个问题才认为是 Q&A 格式
     
-    def split(self, text: str, filename: str, ctx: Optional[PDFContext] = None) -> List[Document]:
-        """按 Q&A 边界切分，附加页码和面包屑"""
-        parts = re.split(self.pattern, text)
+    def split(self, text: str, filename: str, ctx: Optional[SemanticContext] = None) -> List[Document]:
+        """
+        按 Q&A 边界切分，使用锚点状态机处理页码
+        
+        Args:
+            text: 带锚点的全文 (<<<P:n>>>)
+            filename: 文件名
+            ctx: 语义上下文
+        """
         chunks = []
         chunk_index = 0
-        current_pos = 0
+        current_page = 1  # 状态机初始状态
         
-        # 从文件名提取 document_id
         document_id = filename.replace('.pdf', '')
         total_pages = ctx.total_pages if ctx else 1
         
-        # 前言/目录部分
-        if parts[0].strip():
-            intro_text = parts[0].strip()
-            page_num = ctx.get_page_for_position(0) if ctx else 1
+        # 先用正则切分（不处理锚点）
+        pattern = re.compile(r'\n\d+\.\s+(?=[\u4e00-\u9fa5])')
+        matches = list(pattern.finditer(text))
+        
+        if not matches:
+            # 没有匹配到问题，按锚点处理整个文档
+            anchor_page, next_state, clean_text = parse_anchors_from_chunk(text)
+            page_num = anchor_page if anchor_page > 0 else 1
             breadcrumb = ctx.get_breadcrumb(page_num) if ctx else f"【{document_id}】"
-            
-            chunks.append(Document(
-                page_content=f"{breadcrumb}\n\n【前言/目录】\n{intro_text}",
+            return [Document(
+                page_content=f"{breadcrumb}\n\n{clean_text.strip()}",
                 metadata={
-                    "source": filename, 
-                    "type": "intro", 
+                    "source": filename,
                     "strategy": self.name,
                     "document_id": document_id,
-                    "chunk_index": chunk_index,
+                    "chunk_index": 0,
                     "page_number": page_num,
                     "total_pages": total_pages,
                     "breadcrumb": breadcrumb
                 }
-            ))
-            chunk_index += 1
-            current_pos = len(parts[0])
+            )]
         
-        # 问答对
-        for i in range(1, len(parts), 2):
-            header = parts[i]
-            content = parts[i+1] if i+1 < len(parts) else ""
-            full_chunk = header.strip() + content.strip()
+        # 前言/目录部分 (第一个匹配之前的内容)
+        first_match_start = matches[0].start()
+        if first_match_start > 0:
+            intro_text = text[:first_match_start]
+            anchor_page, next_state, clean_intro = parse_anchors_from_chunk(intro_text)
             
-            # 计算页码
-            chunk_start_pos = text.find(header, current_pos)
-            if ctx and chunk_start_pos >= 0:
-                page_num = ctx.get_page_for_position(chunk_start_pos)
-                breadcrumb = ctx.get_breadcrumb(page_num)
+            if anchor_page > 0:
+                current_page = anchor_page
+            page_num = current_page
+            breadcrumb = ctx.get_breadcrumb(page_num) if ctx else f"【{document_id}】"
+            
+            if clean_intro.strip():
+                chunks.append(Document(
+                    page_content=f"{breadcrumb}\n\n【前言/目录】\n{clean_intro.strip()}",
+                    metadata={
+                        "source": filename, 
+                        "type": "intro", 
+                        "strategy": self.name,
+                        "document_id": document_id,
+                        "chunk_index": chunk_index,
+                        "page_number": page_num,
+                        "total_pages": total_pages,
+                        "breadcrumb": breadcrumb
+                    }
+                ))
+                chunk_index += 1
+            
+            # 更新状态
+            if next_state > 0:
+                current_page = next_state
+        
+        # 处理每个问答对
+        for i, match in enumerate(matches):
+            start_pos = match.start() + 1  # +1 跳过开头的 \n
+            end_pos = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+            chunk_text = text[start_pos:end_pos]
+            
+            # 锚点状态机处理
+            anchor_page, next_state, clean_text = parse_anchors_from_chunk(chunk_text)
+            
+            # 判定页码
+            if anchor_page > 0:
+                page_num = anchor_page  # 锚点在开头，立即更新
             else:
-                page_num = 1
-                breadcrumb = f"【{document_id}】"
+                page_num = current_page  # 使用上一状态
+            
+            breadcrumb = ctx.get_breadcrumb(page_num) if ctx else f"【{document_id}】"
             
             # 提取问题标题
-            lines = full_chunk.split('\n')
-            title = lines[0].replace('**', '').strip()
+            lines = clean_text.strip().split('\n')
+            title = lines[0].replace('**', '').strip() if lines else ""
             
             chunks.append(Document(
-                page_content=f"{breadcrumb}\n\n{full_chunk}",
+                page_content=f"{breadcrumb}\n\n{clean_text.strip()}",
                 metadata={
                     "source": filename,
                     "title": title,
@@ -339,7 +383,10 @@ class QARegexStrategy(ChunkStrategy):
                 }
             ))
             chunk_index += 1
-            current_pos = chunk_start_pos + len(header) + len(content)
+            
+            # 状态流转
+            if next_state > 0:
+                current_page = next_state
         
         return chunks
 
@@ -366,55 +413,62 @@ class TitleHierarchyStrategy(ChunkStrategy):
                 return True
         return False
     
-    def split(self, text: str, filename: str, ctx: Optional[PDFContext] = None) -> List[Document]:
-        """按标题层级切分 (优先按条切分)，附加页码和面包屑"""
+    def split(self, text: str, filename: str, ctx: Optional[SemanticContext] = None) -> List[Document]:
+        """按标题层级切分，使用锚点状态机处理页码"""
         pattern = r'(第[一二三四五六七八九十百零]+条)'
         parts = re.split(pattern, text)
         chunks = []
         chunk_index = 0
-        current_pos = 0
+        current_page = 1  # 状态机初始状态
         
         document_id = filename.replace('.pdf', '')
         total_pages = ctx.total_pages if ctx else 1
         
         # 前言部分
         if parts[0].strip() and len(parts[0].strip()) > 50:
-            page_num = ctx.get_page_for_position(0) if ctx else 1
+            anchor_page, next_state, clean_intro = parse_anchors_from_chunk(parts[0])
+            if anchor_page > 0:
+                current_page = anchor_page
+            page_num = current_page
             breadcrumb = ctx.get_breadcrumb(page_num) if ctx else f"【{document_id}】"
             
-            chunks.append(Document(
-                page_content=f"{breadcrumb}\n\n{parts[0].strip()}",
-                metadata={
-                    "source": filename,
-                    "type": "intro",
-                    "strategy": self.name,
-                    "document_id": document_id,
-                    "chunk_index": chunk_index,
-                    "page_number": page_num,
-                    "total_pages": total_pages,
-                    "breadcrumb": breadcrumb
-                }
-            ))
-            chunk_index += 1
-            current_pos = len(parts[0])
+            if clean_intro.strip():
+                chunks.append(Document(
+                    page_content=f"{breadcrumb}\n\n{clean_intro.strip()}",
+                    metadata={
+                        "source": filename,
+                        "type": "intro",
+                        "strategy": self.name,
+                        "document_id": document_id,
+                        "chunk_index": chunk_index,
+                        "page_number": page_num,
+                        "total_pages": total_pages,
+                        "breadcrumb": breadcrumb
+                    }
+                ))
+                chunk_index += 1
+            
+            if next_state > 0:
+                current_page = next_state
         
         # 按条组合
         for i in range(1, len(parts), 2):
             header = parts[i]
             content = parts[i+1] if i+1 < len(parts) else ""
-            full_chunk = header + content.strip()
+            full_chunk = header + content
             
             if len(full_chunk.strip()) > 20:
-                chunk_start_pos = text.find(header, current_pos)
-                if ctx and chunk_start_pos >= 0:
-                    page_num = ctx.get_page_for_position(chunk_start_pos)
-                    breadcrumb = ctx.get_breadcrumb(page_num)
+                anchor_page, next_state, clean_text = parse_anchors_from_chunk(full_chunk)
+                
+                if anchor_page > 0:
+                    page_num = anchor_page
                 else:
-                    page_num = 1
-                    breadcrumb = f"【{document_id}】"
+                    page_num = current_page
+                
+                breadcrumb = ctx.get_breadcrumb(page_num) if ctx else f"【{document_id}】"
                 
                 chunks.append(Document(
-                    page_content=f"{breadcrumb}\n\n{full_chunk.strip()}",
+                    page_content=f"{breadcrumb}\n\n{clean_text.strip()}",
                     metadata={
                         "source": filename,
                         "title": header,
@@ -427,7 +481,9 @@ class TitleHierarchyStrategy(ChunkStrategy):
                     }
                 ))
                 chunk_index += 1
-                current_pos = chunk_start_pos + len(header) + len(content)
+                
+                if next_state > 0:
+                    current_page = next_state
         
         return chunks
 
@@ -512,8 +568,8 @@ class SemanticChunkStrategy(ChunkStrategy):
         
         return 合并后列表
     
-    def split(self, text: str, filename: str, ctx: Optional[PDFContext] = None) -> List[Document]:
-        """执行语义切分 (暂不支持页码映射)"""
+    def split(self, text: str, filename: str, ctx: Optional[SemanticContext] = None) -> List[Document]:
+        """执行语义切分 (使用锚点清理)"""
         if self.embeddings is None:
             raise ValueError("语义切分需要提供 embeddings 模型")
         
@@ -632,8 +688,8 @@ class BaselineStrategy(ChunkStrategy):
         """固定切分总是可用"""
         return True
     
-    def split(self, text: str, filename: str, ctx: Optional[PDFContext] = None) -> List[Document]:
-        """执行固定窗口切分 (暂不支持页码映射)"""
+    def split(self, text: str, filename: str, ctx: Optional[SemanticContext] = None) -> List[Document]:
+        """执行固定窗口切分 (使用锚点清理)"""
         texts = self.splitter.split_text(text)
         chunks = []
         
@@ -667,7 +723,7 @@ class BaselineStrategy(ChunkStrategy):
 def auto_detect_and_chunk(
     text: str, 
     filename: str, 
-    ctx: Optional[PDFContext] = None,
+    ctx: Optional[SemanticContext] = None,
     embeddings: Optional[OpenAIEmbeddings] = None
 ) -> Tuple[List[Document], str]:
     """
@@ -722,6 +778,34 @@ def clean_markdown(text: str) -> str:
 
 
 # ============================================================================
+# 幂等性保障
+# ============================================================================
+
+def clean_existing_chunks(supabase, document_id: str) -> int:
+    """
+    清理数据库中同 document_id 的旧 chunks (幂等性保障)
+    
+    Args:
+        supabase: Supabase 客户端
+        document_id: 文档唯一标识
+    
+    Returns:
+        删除的 chunk 数量
+    """
+    try:
+        # 使用 JSONB 操作符查询 metadata->>'document_id'
+        result = supabase.table("documents").delete().filter(
+            "metadata->>document_id", "eq", document_id
+        ).execute()
+        
+        deleted_count = len(result.data) if result.data else 0
+        return deleted_count
+    except Exception as e:
+        print(f"   ⚠️ 清理旧数据时出错: {e}")
+        return 0
+
+
+# ============================================================================
 # 主流程
 # ============================================================================
 
@@ -759,21 +843,18 @@ def process_and_upload(strategy: str = "auto", dry_run: bool = True):
         filename = os.path.basename(pdf_path)
         document_id = Path(pdf_path).stem
         
-        # 使用 CropBox 提取每页文本并建立页码映射
-        pages_data, total_pages, toc_mapping, display_name = extract_pages_with_metadata(pdf_path)
-        full_text, position_to_page = build_position_to_page_map(pages_data)
+        # 使用锚点注入方案提取文本
+        full_text_with_anchors, total_pages, toc_mapping, display_name = extract_pages_with_anchors(pdf_path)
         
-        # 清洗文本
-        clean_text = clean_markdown(full_text)
+        # 清洗文本 (保留锚点，仅清理格式)
+        clean_text = clean_markdown(full_text_with_anchors)
         
-        # 创建 PDF 上下文
-        ctx = PDFContext(
+        # 创建语义上下文
+        ctx = SemanticContext(
             filename=filename,
             document_id=document_id,
             display_name=display_name,
             total_pages=total_pages,
-            full_text=clean_text,
-            position_to_page=position_to_page,
             toc_mapping=toc_mapping
         )
         
@@ -823,6 +904,14 @@ def process_and_upload(strategy: str = "auto", dry_run: bool = True):
         print(f"\n[DRY RUN] 共 {len(all_docs)} 块准备就绪，未上传")
         print(f"使用 --upload 参数执行实际上传")
     else:
+        # 幂等性: 先清理旧数据
+        print(f"\n[幂等性] 清理旧数据...")
+        for doc_id in strategy_used.keys():
+            doc_id_clean = doc_id.replace('.pdf', '')
+            deleted = clean_existing_chunks(supabase, doc_id_clean)
+            if deleted > 0:
+                print(f"   已删除 {doc_id_clean} 的 {deleted} 条旧记录")
+        
         # 批量上传
         print(f"\n上传 {len(all_docs)} 块到 Supabase...")
         batch_size = 50
