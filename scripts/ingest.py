@@ -149,8 +149,8 @@ def extract_pages_with_anchors(
         clip = fitz.Rect(0, margin, page_rect.width, page_rect.height - margin)
         text = page.get_text("text", clip=clip).strip()
         
-        # 注入锚点：在每页开头插入标记
-        anchor = f"<<<P:{page_number}>>>"
+        # 注入锚点：在每页开头插入标记 (后跟换行符，避免干扰正则)
+        anchor = f"<<<P:{page_number}>>>\n"
         full_text += anchor + text + "\n\n"
     
     doc.close()
@@ -891,11 +891,20 @@ def process_and_upload(strategy: str = "auto", dry_run: bool = True):
         f.write(f"{'=' * 60}\n\n")
         
         for i, doc in enumerate(all_docs):
-            title = doc.metadata.get('title', f'Chunk {i+1}')
-            f.write(f"--- [{doc.metadata.get('strategy')}] {title} ({len(doc.page_content)} 字符) ---\n")
-            f.write(doc.page_content[:500])  # 只预览前 500 字符
-            if len(doc.page_content) > 500:
-                f.write(f"\n... (省略 {len(doc.page_content) - 500} 字符)")
+            meta = doc.metadata
+            f.write(f"--- Chunk {i} ---\n")
+            f.write(f"[metadata]\n")
+            f.write(f"  chunk_index: {meta.get('chunk_index')}\n")
+            f.write(f"  page_number: {meta.get('page_number')}\n")
+            f.write(f"  total_pages: {meta.get('total_pages')}\n")
+            f.write(f"  strategy: {meta.get('strategy')}\n")
+            f.write(f"  document_id: {meta.get('document_id')}\n")
+            f.write(f"  breadcrumb: {meta.get('breadcrumb')}\n")
+            f.write(f"  title: {meta.get('title', '(无)')}\n")
+            f.write(f"[content] ({len(doc.page_content)} 字符)\n")
+            f.write(doc.page_content[:400])  # 只预览前 400 字符
+            if len(doc.page_content) > 400:
+                f.write(f"\n... (省略 {len(doc.page_content) - 400} 字符)")
             f.write(f"\n\n")
     
     print(f"\n预览已保存: {PREVIEW_FILE}")
