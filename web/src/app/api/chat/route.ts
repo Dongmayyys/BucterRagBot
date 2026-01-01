@@ -97,7 +97,8 @@ export async function POST(request: Request) {
                     return {
                         id: r.id,
                         fileName: r.metadata?.source || '未知来源',
-                        page: r.metadata?.page,
+                        page: r.metadata?.page_number as number | undefined,  // 修复：数据库字段是 page_number
+                        totalPages: r.metadata?.total_pages as number | undefined,  // 新增：总页数
                         content: r.content,
                         rerank_score: r.rerank_score,
                         documentId: documentId,

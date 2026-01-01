@@ -11,6 +11,7 @@ export interface Citation {
     id: string;                // 文档块的唯一标识
     fileName: string;          // 来源文件名 (如 "2025-本科生学习指南.pdf")
     page?: number;             // 页码 (如果有)
+    totalPages?: number;       // 文档总页数 (用于翻页边界)
     content?: string;          // 文档内容摘要
     similarity?: number;       // 向量相似度分数
     rerank_score?: number;     // Rerank 后的分数

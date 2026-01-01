@@ -32,7 +32,11 @@ export function SourceBubble({ citations, onCitationClick }: SourceBubbleProps) 
                      cursor-pointer transition-all duration-200
                      hover:shadow-sm hover:border-primary/50
                      w-full"
-                    title={citation.fileName}
+                    title={citation.content
+                        ? (citation.content.length > 200
+                            ? citation.content.slice(0, 200) + '...'
+                            : citation.content)
+                        : citation.fileName}
                 >
                     {/* 文件图标 */}
                     <FileText className="w-3.5 h-3.5 shrink-0 text-muted-foreground group-hover:text-primary transition-colors" />

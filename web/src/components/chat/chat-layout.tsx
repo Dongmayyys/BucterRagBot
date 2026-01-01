@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Sun, Plus, ChevronLeft, ChevronRight, Download, Upload, Heart, Menu } from 'lucide-react';
+import { Sun, Plus, ChevronLeft, ChevronRight, Upload, Heart, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import {
@@ -18,6 +18,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Citation } from '@/lib/types';
+import { getSnapshotUrl } from '@/lib/utils';
 
 /**
  * 聊天布局组件 - 简化版
@@ -60,7 +61,7 @@ export function ChatLayout({ children, selectedCitation, onCloseCitation, onNewC
         <div className="flex h-screen bg-background">
             {/* 右侧：溯源面板 - 全高显示，仅 PC 端 */}
             <aside className="hidden md:flex md:flex-col w-80 border-r border-border bg-muted/30 overflow-hidden order-last">
-                <SourcePanelContent citation={selectedCitation} />
+                <SourcePanelContent citation={selectedCitation} key={selectedCitation?.id} />
             </aside>
 
             {/* 左侧主区域 */}
@@ -134,7 +135,7 @@ export function ChatLayout({ children, selectedCitation, onCloseCitation, onNewC
                 <SheetContent side="bottom" className="h-[70vh]">
                     <SheetTitle className="sr-only">原文详情</SheetTitle>
                     <SheetDescription className="sr-only">查看引用来源的原文内容</SheetDescription>
-                    <SourcePanelContent citation={selectedCitation} />
+                    <SourcePanelContent citation={selectedCitation} key={selectedCitation?.id} />
                 </SheetContent>
             </Sheet>
 
@@ -181,69 +182,13 @@ export function ChatLayout({ children, selectedCitation, onCloseCitation, onNewC
 }
 
 /**
- * 溯源面板内容
+ * 溯源面板内容 - 图片预览版
  */
 function SourcePanelContent({ citation }: { citation: Citation | null }) {
-    const [currentContent, setCurrentContent] = useState<string | null>(null);
-    const [currentIndex, setCurrentIndex] = useState<number | null>(null);
-    const [isLoading, setIsLoading] = useState(false);
-    const [hasPrev, setHasPrev] = useState(false);
-    const [hasNext, setHasNext] = useState(false);
-    const [isOriginalChunk, setIsOriginalChunk] = useState(true); // 是否显示原始检索的 chunk
-
-    // 当选中的 citation 变化时，重置状态
-    useEffect(() => {
-        if (citation) {
-            setCurrentContent(citation.content || null);
-            setCurrentIndex(citation.chunkIndex ?? null);
-            setIsOriginalChunk(true); // 重置为原始 chunk
-            // 检查是否有上下块
-            checkAdjacent(citation.documentId, citation.chunkIndex);
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [citation?.id]); // 故意只依赖 id，避免 citation 对象变化导致无限循环
-
-    // 检查是否有相邻块
-    const checkAdjacent = async (documentId?: string, chunkIndex?: number) => {
-        if (!documentId || chunkIndex === undefined) {
-            setHasPrev(false);
-            setHasNext(false);
-            return;
-        }
-        try {
-            const res = await fetch(`/api/chunks/adjacent?document_id=${encodeURIComponent(documentId)}&chunk_index=${chunkIndex}`);
-            const data = await res.json();
-            setHasPrev(!!data.prev);
-            setHasNext(!!data.next);
-        } catch {
-            setHasPrev(false);
-            setHasNext(false);
-        }
-    };
-
-    // 导航到相邻块
-    const navigateTo = async (direction: 'prev' | 'next') => {
-        if (!citation?.documentId || currentIndex === null) return;
-
-        setIsLoading(true);
-        try {
-            const res = await fetch(`/api/chunks/adjacent?document_id=${encodeURIComponent(citation.documentId)}&chunk_index=${currentIndex}`);
-            const data = await res.json();
-
-            const target = direction === 'prev' ? data.prev : data.next;
-            if (target) {
-                setCurrentContent(target.content);
-                setCurrentIndex(target.chunkIndex);
-                setIsOriginalChunk(false); // 导航后不是原始 chunk
-                // 更新上下块状态
-                checkAdjacent(citation.documentId, target.chunkIndex);
-            }
-        } catch (error) {
-            console.error('导航失败:', error);
-        } finally {
-            setIsLoading(false);
-        }
-    };
+    // 使用 key机制 强制重置组件状态，无需 useEffect 同步
+    const [currentPage, setCurrentPage] = useState<number>(citation?.page || 1);
+    const [isImageLoading, setIsImageLoading] = useState(true);
+    const [imageError, setImageError] = useState(false);
 
     if (!citation) {
         return (
@@ -256,20 +201,40 @@ function SourcePanelContent({ citation }: { citation: Citation | null }) {
         );
     }
 
+    const totalPages = citation.totalPages || 65; // 默认 65 页
+    const documentId = citation.documentId || citation.fileName?.replace('.pdf', '') || '';
+    const imageUrl = getSnapshotUrl(documentId, currentPage);
+
+    const handlePrevPage = () => {
+        if (currentPage > 1) {
+            setCurrentPage(currentPage - 1);
+            setIsImageLoading(true);
+            setImageError(false);
+        }
+    };
+
+    const handleNextPage = () => {
+        if (currentPage < totalPages) {
+            setCurrentPage(currentPage + 1);
+            setIsImageLoading(true);
+            setImageError(false);
+        }
+    };
+
     return (
         <div className="flex flex-col h-full">
-            {/* 面板标题 - 与顶部栏同高 */}
+            {/* 面板标题 */}
             <div className="shrink-0 px-4 h-14 flex items-center border-b border-border">
-                <h3 className="font-medium">原文详情</h3>
+                <h3 className="font-medium">原文预览</h3>
             </div>
 
             {/* 元信息 */}
-            <div className="shrink-0 px-4 py-3 border-b border-border bg-muted/50 space-y-2">
+            <div className="shrink-0 px-4 py-3 border-b border-border bg-muted/50 space-y-1">
                 <div className="flex items-center gap-2 text-sm">
                     <span className="text-muted-foreground">来源：</span>
-                    <span className="font-medium">{citation.fileName?.replace('.pdf', '')}</span>
+                    <span className="font-medium truncate">{citation.fileName?.replace('.pdf', '')}</span>
                 </div>
-                {isOriginalChunk && citation.rerank_score && (
+                {citation.rerank_score && (
                     <div className="flex items-center gap-2 text-sm">
                         <span className="text-muted-foreground">相关度：</span>
                         <span className="text-primary font-medium">
@@ -277,56 +242,70 @@ function SourcePanelContent({ citation }: { citation: Citation | null }) {
                         </span>
                     </div>
                 )}
-                {/* 下载链接 */}
-                <div className="flex items-center gap-2 text-sm">
-                    <span className="text-muted-foreground">下载：</span>
-                    {citation.downloadUrl ? (
-                        <a
-                            href={citation.downloadUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-primary hover:underline flex items-center gap-1"
-                        >
-                            <Download className="h-3 w-3" />
-                            <span>下载原文</span>
-                        </a>
-                    ) : (
-                        <span className="text-muted-foreground/60 text-xs">暂无下载链接</span>
+            </div>
+
+            {/* 图片预览区域 */}
+            <div className="flex-1 overflow-auto p-2 bg-muted/30 flex items-start justify-center">
+                <div className="relative w-full max-w-md">
+                    {/* 加载状态 */}
+                    {isImageLoading && !imageError && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-muted z-10 rounded-lg">
+                            <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent mb-2" />
+                            <div className="text-muted-foreground text-xs font-medium">加载中...</div>
+                        </div>
+                    )}
+
+                    {/* 错误状态 */}
+                    {imageError && (
+                        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                            <div className="text-3xl mb-2">🖼️</div>
+                            <p className="text-sm">图片加载失败</p>
+                            <p className="text-xs mt-1">{imageUrl}</p>
+                        </div>
+                    )}
+
+                    {/* 图片 */}
+                    {!imageError && (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img
+                            src={imageUrl}
+                            alt={`第 ${currentPage} 页`}
+                            className="w-full rounded-lg shadow-md"
+                            style={{ aspectRatio: '0.7072' }} // 保持 PDF 宽高比
+                            onLoad={() => setIsImageLoading(false)}
+                            onError={() => {
+                                setIsImageLoading(false);
+                                setImageError(true);
+                            }}
+                        />
                     )}
                 </div>
             </div>
 
-            {/* 原文内容 */}
-            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-                <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                    {currentContent || citation.content || '暂无原文内容'}
-                </p>
-            </div>
-
-            {/* 上下块导航 - 固定在底部，与输入框区域高度一致 */}
+            {/* 页码导航 */}
             <div className="shrink-0 border-t border-border bg-background/80 backdrop-blur-sm">
                 <div className="p-4 flex items-center justify-between gap-4">
                     <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => navigateTo('prev')}
-                        disabled={!hasPrev || isLoading}
+                        onClick={handlePrevPage}
+                        disabled={currentPage <= 1}
                         className="gap-1 flex-1"
                     >
                         <ChevronLeft className="h-4 w-4" />
-                        <span>上一块</span>
+                        <span>上一页</span>
                     </Button>
                     <span className="text-xs text-muted-foreground shrink-0">
-                        {isLoading ? '加载中...' : `#${currentIndex ?? '-'}`}
+                        {currentPage} / {totalPages}
                     </span>
                     <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => navigateTo('next')}
-                        disabled={!hasNext || isLoading}
+                        onClick={handleNextPage}
+                        disabled={currentPage >= totalPages}
                         className="gap-1 flex-1"
                     >
-                        <span>下一块</span>
+                        <span>下一页</span>
                         <ChevronRight className="h-4 w-4" />
                     </Button>
                 </div>
