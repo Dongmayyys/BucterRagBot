@@ -143,35 +143,93 @@ export function ChatLayout({ children, selectedCitation, onCloseCitation, onNewC
             <Dialog open={showCredits} onOpenChange={setShowCredits}>
                 <DialogContent className="max-w-md">
                     <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                            <Heart className="h-5 w-5 text-pink-500" />
-                            致谢名单
+                        <DialogTitle className="flex flex-col items-center gap-3 pt-4 pb-2">
+                            <div className="p-3 bg-pink-100 rounded-full dark:bg-pink-900/30">
+                                <Heart className="h-6 w-6 text-pink-500 fill-current" />
+                            </div>
+                            <span className="text-xl font-bold bg-gradient-to-r from-pink-500 to-violet-500 bg-clip-text text-transparent">
+                                致谢名单
+                            </span>
                         </DialogTitle>
-                        <DialogDescription>
+                        {/* <DialogDescription>
                             感谢以下项目和个人的支持
-                        </DialogDescription>
+                        </DialogDescription> */}
                     </DialogHeader>
-                    <div className="space-y-4 text-sm">
+                    <div className="space-y-4 text-sm max-h-[60vh] overflow-y-auto pr-2">
+                        {/* 1. 赞助商 */}
                         <div>
-                            <h4 className="font-medium mb-2">🛠 技术栈</h4>
-                            <ul className="list-disc list-inside text-muted-foreground space-y-1">
-                                <li>Next.js - React 框架</li>
-                                <li>Tailwind CSS - 样式框架</li>
-                                <li>SiliconFlow - AI 模型服务</li>
-                                <li>Supabase - 向量数据库</li>
+                            <h4 className="font-medium mb-2 flex items-center gap-1.5">
+                                <span>💰</span> 赞助商
+                            </h4>
+                            <ul className="grid grid-cols-2 gap-2 text-muted-foreground">
+                                <li className="bg-muted/30 p-2 rounded text-xs flex flex-col items-center justify-center gap-0.5">
+                                    <span className="font-medium text-foreground">Google</span>
+                                    <span className="text-[10px] text-muted-foreground/80">
+                                        <span className="line-through opacity-60">赞助</span> 免费的 PRO
+                                    </span>
+                                </li>
+                                <li className="bg-muted/30 p-2 rounded text-xs flex flex-col items-center justify-center gap-0.5">
+                                    <span className="font-medium text-foreground">SiliconFlow</span>
+                                    <span className="text-[10px] text-muted-foreground/80">
+                                        <span className="line-through opacity-60">赞助</span> 免费的 API
+                                    </span>
+                                </li>
                             </ul>
                         </div>
+
+                        {/* 2. 开源库 */}
                         <div>
-                            <h4 className="font-medium mb-2">💡 开源项目</h4>
-                            <ul className="list-disc list-inside text-muted-foreground space-y-1">
-                                <li>Lucide Icons - 图标库</li>
-                                <li>shadcn/ui - UI 组件库</li>
+                            <h4 className="font-medium mb-2 flex items-center gap-1.5">
+                                <span>📦</span> 开源库
+                            </h4>
+                            <ul className="grid grid-cols-2 gap-2 text-muted-foreground">
+                                <li className="bg-muted/30 p-2 rounded text-xs flex items-center gap-2">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                    Next.js
+                                </li>
+                                <li className="bg-muted/30 p-2 rounded text-xs flex items-center gap-2">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-cyan-500" />
+                                    Tailwind CSS
+                                </li>
+                                <li className="bg-muted/30 p-2 rounded text-xs flex items-center gap-2">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-orange-500" />
+                                    Lucide Icons
+                                </li>
+                                <li className="bg-muted/30 p-2 rounded text-xs flex items-center gap-2">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+                                    shadcn/ui
+                                </li>
                             </ul>
                         </div>
+
+                        {/* 3. 部署与服务 */}
                         <div>
-                            <h4 className="font-medium mb-2">❤️ 特别感谢</h4>
-                            <p className="text-muted-foreground">
-                                感谢北京化工大学提供的知识资料支持
+                            <h4 className="font-medium mb-2 flex items-center gap-1.5">
+                                <span>☁️</span> 基础设施
+                            </h4>
+                            <ul className="space-y-2 text-muted-foreground">
+                                <li className="flex items-center justify-between border-b border-border/50 pb-1">
+                                    <span>AI 模型服务</span>
+                                    <span className="font-medium text-foreground">SiliconFlow</span>
+                                </li>
+                                <li className="flex items-center justify-between border-b border-border/50 pb-1">
+                                    <span>向量数据库</span>
+                                    <span className="font-medium text-foreground">Supabase</span>
+                                </li>
+                                <li className="flex items-center justify-between border-b border-border/50 pb-1">
+                                    <span>前端托管</span>
+                                    <span className="font-medium text-foreground">Vercel</span>
+                                </li>
+                            </ul>
+                        </div>
+
+                        {/* 4. 其他资源 */}
+                        <div>
+                            <h4 className="font-medium mb-2 flex items-center gap-1.5">
+                                <span>📚</span> 其他资源
+                            </h4>
+                            <p className="text-muted-foreground text-xs leading-relaxed">
+                                感谢北京化工大学提供的相关资料支持，以及开源社区所有贡献者的无私奉献。
                             </p>
                         </div>
                     </div>
