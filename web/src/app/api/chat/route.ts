@@ -92,18 +92,23 @@ export async function POST(request: Request) {
             citations = await Promise.all(
                 filteredResults.map(async (r) => {
                     const documentId = r.metadata?.document_id as string | undefined;
-                    const docMeta = documentId ? await getDocumentMeta(documentId) : null;
+                    // @deprecated 2025-12-28: getDocumentMeta 已废弃
+                    // 原因：source_documents 表已取消，下载功能已移除
+                    // 暂时跳过查询，避免无意义的网络请求
+                    // 恢复方法：取消下方注释，并确保 source_documents 表存在
+                    // const docMeta = documentId ? await getDocumentMeta(documentId) : null;
 
                     return {
                         id: r.id,
                         fileName: r.metadata?.source || '未知来源',
-                        page: r.metadata?.page_number as number | undefined,  // 修复：数据库字段是 page_number
-                        totalPages: r.metadata?.total_pages as number | undefined,  // 新增：总页数
+                        page: r.metadata?.page_number as number | undefined,
+                        totalPages: r.metadata?.total_pages as number | undefined,
                         content: r.content,
                         rerank_score: r.rerank_score,
                         documentId: documentId,
                         chunkIndex: r.metadata?.chunk_index as number | undefined,
-                        downloadUrl: docMeta?.metadata?.download_url || undefined,
+                        // @deprecated: 下载功能已移除，直接设为 undefined
+                        downloadUrl: undefined,
                     };
                 })
             );

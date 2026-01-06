@@ -4,8 +4,12 @@ import { supabaseAdmin } from '@/lib/supabase';
 /**
  * API Route: /api/chunks/adjacent
  * 
- * 获取指定 chunk 的相邻 chunks（上一块、下一块）
- * 用于溯源面板的"上下文导航"功能
+ * @deprecated 2025-12-28 重构后已废弃
+ * 原用途：获取指定 chunk 的相邻 chunks（上一块、下一块），用于溯源面板的"上下文导航"
+ * 现状态：
+ * - SourcePanel 已改为展示 WebP 图片预览，使用页码导航（上一页/下一页）
+ * - 不再需要 chunk 内容导航
+ * - 保留此 API 以备将来恢复 chunk 导航功能
  * 
  * 参数:
  *   - document_id: 文档 ID

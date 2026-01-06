@@ -72,6 +72,10 @@ export async function vectorSearch(
 
 /**
  * 文档元数据类型
+ * 
+ * @deprecated 2025-12-28 重构后已废弃
+ * 原设计：多表方案，source_documents 表存储文档元信息
+ * 现状态：改为单表 documents，此功能暂未使用
  */
 export interface DocumentMeta {
     id: string;
@@ -83,12 +87,23 @@ export interface DocumentMeta {
 
 /**
  * 内存缓存 - 存储已查询过的文档元数据
+ * 
+ * @deprecated 2025-12-28 重构后已废弃
+ * 原用途：缓存 source_documents 表查询结果
+ * 现状态：source_documents 表已取消，改为单表方案
  */
 const documentMetaCache = new Map<string, DocumentMeta>();
 
 /**
  * 获取文档元数据
  * 带内存缓存，避免重复查询
+ * 
+ * @deprecated 2025-12-28 重构后已废弃
+ * 原用途：从 source_documents 表获取 download_url 等元信息
+ * 现状态：
+ * - source_documents 表已取消，改为单表 documents
+ * - 下载功能已移除，SourcePanel 改为展示 WebP 图片预览
+ * - 保留此代码以备将来需要恢复下载功能
  */
 export async function getDocumentMeta(documentId: string): Promise<DocumentMeta | null> {
     // 1. 先查缓存
@@ -102,7 +117,7 @@ export async function getDocumentMeta(documentId: string): Promise<DocumentMeta 
     const startTime = Date.now();
 
     const { data, error } = await supabaseAdmin
-        .from('source_documents')
+        .from('source_documents')  // ⚠️ 此表已不存在，调用会失败
         .select('id, metadata')
         .eq('id', documentId)
         .single();
