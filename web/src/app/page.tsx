@@ -1,7 +1,10 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
-import { ChatLayout } from '@/components/chat/chat-layout';
+import { ChatHeader } from '@/components/chat/chat-header';
+import { ChatContainer } from '@/components/chat/chat-container';
+import { MobileSourceSheet } from '@/components/chat/mobile-source-sheet';
+import { CreditsDialog } from '@/components/chat/credits-dialog';
 import { ChatList } from '@/components/chat/chat-list';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatMessage, Citation } from '@/lib/types';
@@ -23,8 +26,10 @@ const STREAM_SEPARATOR = '---STREAM_START---';
 export default function ChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);  // 引用详情面板
   const [selectedCitation, setSelectedCitation] = useState<Citation | null>(null);
+  // 致谢弹窗
+  const [showCredits, setShowCredits] = useState(false);
   const [phase, setPhase] = useState<ProcessingPhase>('idle');
   const [hasResults, setHasResults] = useState(true);
   const [isChat, setIsChat] = useState(false); // 是否为闲聊模式
@@ -121,8 +126,9 @@ export default function ChatPage() {
             } else {
               // 知识查询：显示查询阶段完成，进入整理
               setPhase('searching');
-              setTimeout(() => setPhase('organizing'), 100);
-              setTimeout(() => setPhase('generating'), 200);
+              // 使用函数式更新防止覆盖已完成/已错误的最终状态
+              setTimeout(() => setPhase(p => (p === 'done' || p === 'error' || p === 'idle') ? p : 'organizing'), 100);
+              setTimeout(() => setPhase(p => (p === 'done' || p === 'error' || p === 'idle') ? p : 'generating'), 200);
             }
           } catch (e) {
             console.error('[Frontend] Failed to parse header:', e);
@@ -198,22 +204,29 @@ export default function ChatPage() {
   }, []);
 
   return (
-    <ChatLayout
-      selectedCitation={selectedCitation}
-      onCloseCitation={() => setSelectedCitation(null)}
-      onNewChat={handleClear}
-      hasMessages={messages.length > 0}
-    >
-      {/* 消息列表 */}
-      <ChatList
-        messages={messages}
-        isLoading={isLoading}
-        phase={phase}
-        hasResults={hasResults}
-        isChat={isChat}
-        onSuggestionClick={sendMessage}
-        onCitationClick={handleCitationClick}
+    <div className="flex flex-col h-screen bg-background">
+      {/* 顶部标题栏 */}
+      <ChatHeader
+        onNewChat={handleClear}
+        hasMessages={messages.length > 0}
+        onShowCredits={() => setShowCredits(true)}
       />
+
+      {/* 聊天区域 + 溯源面板 */}
+      <ChatContainer
+        citation={selectedCitation}
+        onCloseCitation={() => setSelectedCitation(null)}
+      >
+        <ChatList
+          messages={messages}
+          isLoading={isLoading}
+          phase={phase}
+          hasResults={hasResults}
+          isChat={isChat}
+          onSuggestionClick={sendMessage}
+          onCitationClick={handleCitationClick}
+        />
+      </ChatContainer>
 
       {/* 错误提示 */}
       {error && (
@@ -228,6 +241,18 @@ export default function ChatPage() {
         onStop={handleStop}
         isLoading={isLoading}
       />
-    </ChatLayout>
+
+      {/* 移动端：溯源弹窗（底部 Sheet）*/}
+      <MobileSourceSheet
+        citation={selectedCitation}
+        onClose={() => setSelectedCitation(null)}
+      />
+
+      {/* 致谢弹窗 */}
+      <CreditsDialog
+        open={showCredits}
+        onOpenChange={setShowCredits}
+      />
+    </div>
   );
 }

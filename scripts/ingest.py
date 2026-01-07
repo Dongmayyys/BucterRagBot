@@ -54,8 +54,109 @@ SILICONFLOW_API_KEY = os.getenv("SILICONFLOW_API_KEY")
 目标块大小 = 180      # 期望每个 Chunk 约 180 字符 (与 qa_regex 对齐)
 最小块长度 = 80       # 块长度低于此值会合并
 
-# 裁切参数
-DEFAULT_CROP_RATIO = 0.10  # 裁切顶部/底部各 10% 去除页眉页脚
+# 裁切参数（针对不同文档可配置不同值）
+DEFAULT_CROP_RATIO = 0.10  # 默认裁切顶部/底部各 10%
+
+# 文档特定的裁切比例
+DOCUMENT_CROP_RATIO = {
+    "2025-本科生手册": 0.13,  # 手册页眉页脚较大，需要 13%
+    # 学习指南使用默认 10%
+}
+
+# ============================================================================
+# 手动 TOC 映射表（用于 PDF 大纲不完整的文档）
+# 格式：{document_id: {"offset": 偏移量, "toc": {page_number: [章节层级列表]}}}
+# 注意：page_number 是目录标注的逻辑页码，offset 用于转换到物理页码
+# ============================================================================
+
+# 页码偏移量：物理页码 = 逻辑页码 + offset
+MANUAL_TOC_OFFSET = {
+    "2025-本科生手册": 8,  # 目录标注 P3 对应物理页 11
+}
+
+MANUAL_TOC_MAPPING = {
+    "2025-本科生手册": {
+        # 法律法规规章 (P3-P14)
+        3: ["法律法规规章", "普通高等学校学生管理规定（教育部41号令）"],
+        14: ["法律法规规章", "高等学校学生行为准则"],
+
+        # 教育教学管理制度 (P17-P100)
+        17: ["教育教学管理制度", "北京化工大学本科生学籍管理规定"],
+        29: ["教育教学管理制度", "北京化工大学课堂教学管理规定"],
+        30: ["教育教学管理制度", "北京化工大学本科生课程考核管理规定"],
+        37: ["教育教学管理制度", "北京化工大学考场规则"],
+        38: ["教育教学管理制度", "北京化工大学本科生课程成绩评定与管理办法"],
+        43: ["教育教学管理制度", "课程总评成绩记分方式及绩点对应关系表"],
+        44: ["教育教学管理制度", "北京化工大学本科生创新创业教育学分认定管理办法（试行）"],
+        51: ["教育教学管理制度", "北京化工大学《国家学生体质健康标准》实施办法（修订）"],
+        59: ["教育教学管理制度", "北京化工大学'奔跑在北化'课外体育锻炼身体素质提升项目活动规则"],
+        61: ["教育教学管理制度", "北京化工大学本科生转专业实施细则"],
+        68: ["教育教学管理制度", "北京化工大学本科生学位论文学术道德和学术规范建设实施办法（试行）"],
+        71: ["教育教学管理制度", "北京化工大学本科生毕业环节工作规定"],
+        80: ["教育教学管理制度", "北京化工大学推荐优秀应届本科毕业生免试攻读研究生管理规定"],
+        84: ["教育教学管理制度", "北京化工大学学位授予实施细则"],
+        86: ["教育教学管理制度", "北京化工大学本科生辅修学士学位管理办法"],
+        89: ["教育教学管理制度", "北京化工大学关于实施本科生导师制的指导意见"],
+        90: ["教育教学管理制度", "北京化工大学大学生科研训练计划实施细则"],
+        93: ["教育教学管理制度", "北京化工大学实验室守则"],
+        94: ["教育教学管理制度", "北京化工大学学生下厂实习规则"],
+        95: ["教育教学管理制度", "北京化工大学教室管理规定"],
+        97: ["教育教学管理制度", "'北化在线'教育综合平台简介及使用说明"],
+        99: ["教育教学管理制度", "北京化工大学智慧教学系统简介及使用注意事项"],
+        100: ["教育教学管理制度", "北京化工大学实验室仪器设备损坏赔偿规定"],
+
+        # 学生事务管理制度 (P103-P176)
+        103: ["学生事务管理制度", "北京化工大学学生纪律处分规定"],
+        120: ["学生事务管理制度", "北京化工大学本科生第二课堂成绩评定实施办法（试行）"],
+        126: ["学生事务管理制度", "北京化工大学国家奖学金评审实施细则"],
+        128: ["学生事务管理制度", "北京化工大学国家励志奖学金评审实施细则"],
+        130: ["学生事务管理制度", "北京化工大学社会资助奖学金评定管理办法"],
+        133: ["学生事务管理制度", "北京化工大学人民奖学金评审实施细则"],
+        136: ["学生事务管理制度", "北京化工大学素质拓展竞赛奖评定及奖励办法"],
+        138: ["学生事务管理制度", "北京化工大学校长奖评选办法"],
+        140: ["学生事务管理制度", "北京化工大学家庭经济困难学生资助工作实施办法"],
+        143: ["学生事务管理制度", "北京化工大学家庭经济困难学生认定工作实施办法"],
+        147: ["学生事务管理制度", "北京化工大学家庭经济困难学生学费减免工作实施细则"],
+        148: ["学生事务管理制度", "北京化工大学本科生国家助学金工作实施细则"],
+        150: ["学生事务管理制度", "北京化工大学社会助学金实施细则"],
+        153: ["学生事务管理制度", "北京化工大学校园地国家助学贷款还款救助暂行办法"],
+        155: ["学生事务管理制度", "北京化工大学国家助学贷款工作实施细则"],
+        158: ["学生事务管理制度", "北京化工大学关于开展学生校内无息借款工作的实施细则"],
+        162: ["学生事务管理制度", "北京化工大学学生勤工助学工作实施细则"],
+        167: ["学生事务管理制度", "北京化工大学学生困难补助工作实施细则"],
+        169: ["学生事务管理制度", "国家助学贷款代偿实施细则"],
+        172: ["学生事务管理制度", "北京化工大学服兵役学生国家教育资助工作实施细则"],
+        175: ["学生事务管理制度", "北京化工大学发放本科生伙食补贴实施细则"],
+        176: ["学生事务管理制度", "学生证、校徽管理"],
+
+        # 其他管理制度 (P179-P244)
+        179: ["其他管理制度", "校园文明学生公约"],
+        185: ["其他管理制度", "北京化工大学学生公寓管理规定"],
+        205: ["其他管理制度", "北京化工大学校园垃圾管理规定"],
+        206: ["其他管理制度", "北京化工大学控烟管理办法"],
+        209: ["其他管理制度", "学生食堂服务信息"],
+        211: ["其他管理制度", "北京化工大学校医院新生入学须知"],
+        213: ["其他管理制度", "公费医疗管理规定（试行）"],
+        216: ["其他管理制度", "校园商贸服务信息"],
+        217: ["其他管理制度", "运动场馆使用相关管理规定"],
+        218: ["其他管理制度", "北京化工大学图书馆资源使用管理规定"],
+        225: ["其他管理制度", "昌平校区图书馆存包柜使用管理细则（试行）"],
+        227: ["其他管理制度", "北京化工大学校史展开放管理规定（暂行）"],
+        229: ["其他管理制度", "保卫处管理及工作程序"],
+        234: ["其他管理制度", "北京化工大学校园信息化服务概况"],
+        237: ["其他管理制度", "北京化工大学校园卡管理办法"],
+        240: ["其他管理制度", "北京化工大学校园网用户守则"],
+        243: ["其他管理制度", "北京化工大学一站式服务大厅简介"],
+        244: ["其他管理制度", "昌平校区玉屏山区域游园须知"],
+
+        # 常用信息 (P247-P252)
+        247: ["常用信息", "北京化工大学作息时间与节假日"],
+        248: ["常用信息", "北京化工大学地理位置"],
+        249: ["常用信息", "北京化工大学常用办公电话号码"],
+        251: ["常用信息", "北京化工大学校歌"],
+        252: ["常用信息", "北京主要高校名录"],
+    }
+}
 
 
 # ============================================================================
@@ -198,6 +299,10 @@ def parse_anchors_from_chunk(chunk: str) -> Tuple[int, int, str]:
     
     # 清除所有锚点
     clean_text = re.sub(PAGE_ANCHOR_PATTERN, '', chunk)
+    
+    # 压缩连续空行：多个换行 -> 单个换行
+    clean_text = re.sub(r'\n{3,}', '\n\n', clean_text)
+    clean_text = clean_text.strip()
     
     return current_page, next_page_state, clean_text
 
@@ -414,7 +519,7 @@ class TitleHierarchyStrategy(ChunkStrategy):
         return False
     
     def split(self, text: str, filename: str, ctx: Optional[SemanticContext] = None) -> List[Document]:
-        """按标题层级切分，使用锚点状态机处理页码"""
+        """按标题层级切分，使用锚点状态机处理页码，动态提取章节标题"""
         pattern = r'(第[一二三四五六七八九十百零]+条)'
         parts = re.split(pattern, text)
         chunks = []
@@ -423,6 +528,93 @@ class TitleHierarchyStrategy(ChunkStrategy):
         
         document_id = filename.replace('.pdf', '')
         total_pages = ctx.total_pages if ctx else 1
+        display_name = ctx.display_name if ctx else document_id
+        
+        # ====== 第一步：扫描全文，建立"锚点页码 → 章节标题"映射 ======
+        # 正则说明：匹配"第X章/节" + 空格和汉字（不含换行，最多15字符）
+        chapter_pattern = re.compile(r'第[一二三四五六七八九十百零]+章[ \u4e00-\u9fa5]{1,15}')
+        section_pattern = re.compile(r'第[一二三四五六七八九十百零]+节[ \u4e00-\u9fa5]{1,15}')
+        
+        # 按锚点切分全文，记录每个锚点后的章节标题
+        anchor_split = re.split(PAGE_ANCHOR_PATTERN, text)
+        page_to_chapter = {}  # {页码: "第X章 XXX"}
+        page_to_section = {}  # {页码: "第X节 XXX"}
+        
+        current_scan_page = 0
+        for i, segment in enumerate(anchor_split):
+            if i % 2 == 1:  # 奇数位置是页码
+                current_scan_page = int(segment)
+            else:
+                # 在这个片段中查找章节标题
+                chapter_match = chapter_pattern.search(segment)
+                section_match = section_pattern.search(segment)
+                if chapter_match and current_scan_page > 0:
+                    page_to_chapter[current_scan_page] = chapter_match.group().strip()
+                if section_match and current_scan_page > 0:
+                    page_to_section[current_scan_page] = section_match.group().strip()
+        
+        # 章节标题状态机（用于填充没有直接章节标题的页面）
+        current_chapter = ""
+        current_section = ""
+        
+        def get_chapter_for_page(page: int) -> str:
+            """获取指定页码的章节标题，向前查找最近的章节"""
+            nonlocal current_chapter, current_section
+            
+            # 如果这一页有新章节，更新状态
+            if page in page_to_chapter:
+                current_chapter = page_to_chapter[page]
+                current_section = ""  # 新章节，重置节
+            if page in page_to_section:
+                current_section = page_to_section[page]
+            
+            return current_chapter, current_section
+        
+        # 获取手动 TOC 映射（如果存在）
+        manual_toc = MANUAL_TOC_MAPPING.get(document_id, {})
+        manual_offset = MANUAL_TOC_OFFSET.get(document_id, 0)  # 页码偏移量
+        current_manual_breadcrumb = []  # 当前生效的手动面包屑
+        
+        def get_manual_breadcrumb_for_page(page: int) -> List[str]:
+            """从手动映射表获取面包屑，使用最近的匹配页码"""
+            nonlocal current_manual_breadcrumb
+            
+            # 将物理页码转换为逻辑页码：逻辑页码 = 物理页码 - offset
+            logical_page = page - manual_offset
+            
+            # 找到 <= logical_page 的最大 key
+            valid_pages = [p for p in manual_toc.keys() if p <= logical_page]
+            if valid_pages:
+                nearest_page = max(valid_pages)
+                current_manual_breadcrumb = manual_toc[nearest_page]
+            
+            return current_manual_breadcrumb
+        
+        def build_breadcrumb(page_num: int) -> str:
+            """构建面包屑，优先使用手动映射表"""
+            # 1. 优先使用手动 TOC 映射表
+            if manual_toc:
+                parts = get_manual_breadcrumb_for_page(page_num)
+                if parts:
+                    return f"【{display_name} > {' > '.join(parts)}】"
+            
+            # 2. 如果有 PDF toc_mapping 且有效，使用它
+            if ctx and ctx.toc_mapping:
+                toc_breadcrumb = ctx.get_breadcrumb(page_num)
+                if " > " in toc_breadcrumb and not toc_breadcrumb.endswith(" > 】"):
+                    return toc_breadcrumb
+            
+            # 3. 否则使用动态提取的章节标题
+            chapter, section = get_chapter_for_page(page_num)
+            breadcrumb_parts = [f"【{display_name}"]
+            if chapter:
+                breadcrumb_parts.append(chapter)
+            if section:
+                breadcrumb_parts.append(section)
+            breadcrumb_parts[-1] += "】"
+            return " > ".join(breadcrumb_parts)
+        
+        # ====== 第二步：切分并构建 chunks ======
         
         # 前言部分
         if parts[0].strip() and len(parts[0].strip()) > 50:
@@ -430,7 +622,7 @@ class TitleHierarchyStrategy(ChunkStrategy):
             if anchor_page > 0:
                 current_page = anchor_page
             page_num = current_page
-            breadcrumb = ctx.get_breadcrumb(page_num) if ctx else f"【{document_id}】"
+            breadcrumb = build_breadcrumb(page_num)
             
             if clean_intro.strip():
                 chunks.append(Document(
@@ -465,7 +657,7 @@ class TitleHierarchyStrategy(ChunkStrategy):
                 else:
                     page_num = current_page
                 
-                breadcrumb = ctx.get_breadcrumb(page_num) if ctx else f"【{document_id}】"
+                breadcrumb = build_breadcrumb(page_num)
                 
                 chunks.append(Document(
                     page_content=f"{breadcrumb}\n\n{clean_text.strip()}",
@@ -843,8 +1035,9 @@ def process_and_upload(strategy: str = "auto", dry_run: bool = True):
         filename = os.path.basename(pdf_path)
         document_id = Path(pdf_path).stem
         
-        # 使用锚点注入方案提取文本
-        full_text_with_anchors, total_pages, toc_mapping, display_name = extract_pages_with_anchors(pdf_path)
+        # 使用锚点注入方案提取文本（根据文档使用不同的裁切参数）
+        crop_ratio = DOCUMENT_CROP_RATIO.get(document_id, DEFAULT_CROP_RATIO)
+        full_text_with_anchors, total_pages, toc_mapping, display_name = extract_pages_with_anchors(pdf_path, crop_ratio)
         
         # 清洗文本 (保留锚点，仅清理格式)
         clean_text = clean_markdown(full_text_with_anchors)

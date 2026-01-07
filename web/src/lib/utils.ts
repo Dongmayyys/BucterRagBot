@@ -13,6 +13,7 @@ export const SNAPSHOT_BUCKET = 'pdf-snapshots';
 // TODO: 后续可从 API 获取或在上传时存入数据库
 const DOCUMENT_HASH_MAP: Record<string, string> = {
   '2025-本科生学习指南': 'e60d51e8',
+  '2025-本科生手册': 'fb13b00c',
 };
 
 /**
