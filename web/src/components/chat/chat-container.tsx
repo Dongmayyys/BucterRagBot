@@ -12,10 +12,9 @@ interface ChatContainerProps {
 export function ChatContainer({ children, citation, onCloseCitation }: ChatContainerProps) {
     return (
         <div className="flex-1 flex overflow-hidden min-h-0">
-            {/* 主聊天区域 - 点击关闭面板 */}
+            {/* 主聊天区域 */}
             <div
                 className="flex-1 flex flex-col transition-all duration-300 ease-out overflow-hidden"
-                onClick={() => citation && onCloseCitation()}
             >
                 {children}
             </div>
@@ -28,11 +27,10 @@ export function ChatContainer({ children, citation, onCloseCitation }: ChatConta
                     transition-all duration-300 ease-out
                     ${citation ? 'w-96 ml-2' : 'w-0'}
                 `}
-                onClick={(e) => e.stopPropagation()}
             >
                 {citation && (
                     <div className="h-full bg-background border border-border rounded-lg shadow-lg overflow-hidden m-2">
-                        <SourcePanelContent citation={citation} />
+                        <SourcePanelContent citation={citation} onClose={onCloseCitation} />
                     </div>
                 )}
             </aside>

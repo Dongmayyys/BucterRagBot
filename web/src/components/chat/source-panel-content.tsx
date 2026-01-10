@@ -1,18 +1,20 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Citation } from '@/lib/types';
 import { getSnapshotUrl } from '@/lib/utils';
 
 /**
  * 溯源面板内容 - 图片预览版
  */
-export function SourcePanelContent({ citation }: { citation: Citation | null }) {
+export function SourcePanelContent({ citation, onClose }: { citation: Citation | null; onClose?: () => void }) {
     const [currentPage, setCurrentPage] = useState<number>(citation?.page || 1);
     const [isImageLoading, setIsImageLoading] = useState(true);
     const [imageError, setImageError] = useState(false);
+    const [showLargeImage, setShowLargeImage] = useState(false);
 
     if (!citation) {
         return (
@@ -47,29 +49,43 @@ export function SourcePanelContent({ citation }: { citation: Citation | null }) 
 
     return (
         <div className="flex flex-col h-full">
-            {/* 面板标题 */}
-            <div className="shrink-0 px-4 h-14 flex items-center border-b border-border">
-                <h3 className="font-medium">原文预览</h3>
-            </div>
-
-            {/* 元信息 */}
-            <div className="shrink-0 px-4 py-3 border-b border-border bg-muted/50 space-y-1">
-                <div className="flex items-center gap-2 text-sm">
-                    <span className="text-muted-foreground">来源：</span>
-                    <span className="font-medium truncate">{citation.fileName?.replace('.pdf', '')}</span>
+            {/* 面包屑 + 关闭按钮 */}
+            <div className="shrink-0 px-4 h-14 flex items-center justify-between border-b border-border">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground min-w-0">
+                    <span>原文预览</span>
+                    <span>/</span>
+                    <span className="font-medium text-foreground truncate">
+                        {citation.fileName?.replace('.pdf', '')}
+                    </span>
+                    <span className="text-xs">
+                        ({currentPage} / {totalPages})
+                    </span>
                 </div>
-                {citation.rerank_score && (
-                    <div className="flex items-center gap-2 text-sm">
-                        <span className="text-muted-foreground">相关度：</span>
-                        <span className="text-primary font-medium">
-                            {(citation.rerank_score * 100).toFixed(0)}%
-                        </span>
-                    </div>
+                {onClose && (
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="shrink-0 h-8 w-8"
+                        onClick={onClose}
+                    >
+                        <X className="h-4 w-4" />
+                    </Button>
                 )}
             </div>
 
-            {/* 图片预览区域 */}
-            <div className="flex-1 overflow-auto p-2 bg-muted/30 flex items-start justify-center">
+            {/* 图片预览区域 + 两侧按钮 */}
+            <div className="flex-1 overflow-hidden p-2 bg-muted/30 flex items-center justify-center relative">
+                {/* 左侧按钮 */}
+                <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={handlePrevPage}
+                    disabled={currentPage <= 1}
+                    className="absolute left-2 z-20 h-12 w-12 rounded-full bg-white dark:bg-gray-800 shadow-lg hover:shadow-xl hover:scale-105 transition-all"
+                >
+                    <ChevronLeft className="h-6 w-6" />
+                </Button>
+
                 <div className="relative w-full max-w-md">
                     {/* 加载状态 */}
                     {isImageLoading && !imageError && (
@@ -88,14 +104,15 @@ export function SourcePanelContent({ citation }: { citation: Citation | null }) 
                         </div>
                     )}
 
-                    {/* 图片 */}
+                    {/* 缩略图 - 点击放大 */}
                     {!imageError && (
                         /* eslint-disable-next-line @next/next/no-img-element */
                         <img
                             src={imageUrl}
                             alt={`第 ${currentPage} 页`}
-                            className="w-full rounded-lg shadow-md"
+                            className="w-full rounded-lg shadow-md cursor-zoom-in transition-opacity hover:opacity-90"
                             style={{ aspectRatio: '0.7072' }}
+                            onClick={() => setShowLargeImage(true)}
                             onLoad={() => setIsImageLoading(false)}
                             onError={() => {
                                 setIsImageLoading(false);
@@ -104,36 +121,32 @@ export function SourcePanelContent({ citation }: { citation: Citation | null }) 
                         />
                     )}
                 </div>
+
+                {/* 右侧按钮 */}
+                <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={handleNextPage}
+                    disabled={currentPage >= totalPages}
+                    className="absolute right-2 z-20 h-12 w-12 rounded-full bg-white dark:bg-gray-800 shadow-lg hover:shadow-xl hover:scale-105 transition-all"
+                >
+                    <ChevronRight className="h-6 w-6" />
+                </Button>
             </div>
 
-            {/* 页码导航 */}
-            <div className="shrink-0 border-t border-border bg-background/80 backdrop-blur-sm">
-                <div className="p-4 flex items-center justify-between gap-4">
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handlePrevPage}
-                        disabled={currentPage <= 1}
-                        className="gap-1 flex-1"
-                    >
-                        <ChevronLeft className="h-4 w-4" />
-                        <span>上一页</span>
-                    </Button>
-                    <span className="text-xs text-muted-foreground shrink-0">
-                        {currentPage} / {totalPages}
-                    </span>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleNextPage}
-                        disabled={currentPage >= totalPages}
-                        className="gap-1 flex-1"
-                    >
-                        <span>下一页</span>
-                        <ChevronRight className="h-4 w-4" />
-                    </Button>
-                </div>
-            </div>
+            {/* 大图弹窗 - 纯方形 */}
+            <Dialog open={showLargeImage} onOpenChange={setShowLargeImage}>
+                <DialogContent className="max-w-full max-h-full w-auto h-auto p-0 rounded-none border-0 bg-transparent shadow-none">
+                    <DialogTitle className="sr-only">原文预览 - 第 {currentPage} 页</DialogTitle>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                        src={imageUrl}
+                        alt={`第 ${currentPage} 页 - 大图`}
+                        className="max-w-[95vw] max-h-[95vh] w-auto h-auto object-contain"
+                        style={{ touchAction: 'pinch-zoom' }}
+                    />
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
