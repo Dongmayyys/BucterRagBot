@@ -251,25 +251,25 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
         return (
             <div className="flex-1 flex flex-col items-center justify-center px-4 py-12 overflow-auto">
                 {/* 欢迎标题 */}
-                <div className="text-center mb-8">
-                    <h1 className="text-3xl sm:text-4xl font-bold mb-3 min-h-10 flex items-center justify-center gap-2">
+                <div className="text-center mb-12">
+                    <h1 className="text-4xl sm:text-6xl font-bold mb-4 h-16 sm:h-20 flex items-center justify-center gap-3">
                         <span className={`bg-gradient-to-r ${gradientClass} bg-clip-text text-transparent`}>
                             {displayText}
                         </span>
                         {(isTyping || isDeleting) ? (
-                            <span className={`inline-block w-1 h-8 ${cursorColor} animate-pulse rounded-full`} />
+                            <span className={`inline-block w-1 sm:w-1.5 h-8 sm:h-12 ${cursorColor} animate-pulse rounded-full`} />
                         ) : (
                             <button
                                 ref={emojiButtonRef}
                                 onClick={handleEmojiClick}
-                                className="text-3xl cursor-pointer inline-block hover:scale-110 transition-transform"
+                                className="text-4xl sm:text-5xl cursor-pointer inline-block hover:scale-110 transition-transform"
                                 style={{ transformOrigin: 'center' }}
                             >
                                 {currentEmoji}
                             </button>
                         )}
                     </h1>
-                    <p className="text-muted-foreground max-w-md">
+                    <p className="text-muted-foreground text-lg max-w-xl">
                         {isEasterEgg ? easterEggSubtitle : subtitle}
                     </p>
                 </div>
@@ -305,7 +305,7 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
                 )}
 
                 {/* 建议卡片网格 */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-lg">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-2xl">
                     {currentSuggestions.map((suggestion, idx) => (
                         <SuggestionButton
                             key={idx}
