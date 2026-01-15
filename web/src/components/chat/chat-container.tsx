@@ -30,7 +30,7 @@ export function ChatContainer({ children, citation, onCloseCitation }: ChatConta
             >
                 {citation && (
                     <div className="h-full bg-background border border-border rounded-lg shadow-lg overflow-hidden m-2">
-                        <SourcePanelContent citation={citation} onClose={onCloseCitation} />
+                        <SourcePanelContent key={citation.id} citation={citation} onClose={onCloseCitation} />
                     </div>
                 )}
             </aside>

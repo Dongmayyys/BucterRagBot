@@ -25,7 +25,7 @@ export function MobileSourceSheet({ citation, onClose }: MobileSourceSheetProps)
             <SheetContent side="bottom" className="h-[70vh]">
                 <SheetTitle className="sr-only">原文详情</SheetTitle>
                 <SheetDescription className="sr-only">查看引用来源的原文内容</SheetDescription>
-                <SourcePanelContent citation={citation} />
+                <SourcePanelContent key={citation?.id} citation={citation} />
             </SheetContent>
         </Sheet>
     );
