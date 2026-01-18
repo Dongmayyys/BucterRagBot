@@ -54,7 +54,7 @@ export function SourcePanelContent({ citation, onClose }: { citation: Citation |
                     <span>原文预览</span>
                     <span>/</span>
                     <span className="font-medium text-foreground truncate">
-                        {citation.fileName?.replace('.pdf', '')}
+                        {citation.fileName?.replace('.pdf', '').slice(5)}
                     </span>
                     <span className="text-xs">
                         ({currentPage} / {totalPages})
