@@ -18,6 +18,7 @@ export interface Citation {
     // 新增字段
     documentId?: string;       // 关联 source_documents.id
     chunkIndex?: number;       // 在文档中的位置（用于上下块导航）
+    customImageUrl?: string;   // 自定义图片 URL（优先于 PDF 快照）
     /** @deprecated 2025-12-28: 下载功能已移除，SourcePanel 改为图片预览 */
     downloadUrl?: string;      // 下载链接
 }

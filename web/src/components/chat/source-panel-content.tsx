@@ -30,7 +30,9 @@ export function SourcePanelContent({ citation, onClose }: { citation: Citation |
 
     const totalPages = citation.totalPages || 65;
     const documentId = citation.documentId || citation.fileName?.replace('.pdf', '') || '';
-    const imageUrl = getSnapshotUrl(documentId, currentPage);
+
+    // 优先使用自定义图片，降级到 PDF 快照
+    const imageUrl = citation.customImageUrl || getSnapshotUrl(documentId, currentPage);
 
     const handlePrevPage = () => {
         if (currentPage > 1) {

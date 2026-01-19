@@ -48,8 +48,15 @@ export async function POST(request: Request) {
 
         // ★ 1. 意图分类 + Query Rewriting（融合对话历史）
         console.log('[API] Classifying intent and rewriting query...');
-        const { intent, rewrittenQuery } = await classifyIntent(query, messages);
-        console.log('[API] Intent:', intent);
+
+        // 🥚 彩蛋检测：包含"巴克特"时强制查询知识库
+        const isEasterEgg = query.includes('巴克特');
+
+        const { intent, rewrittenQuery } = isEasterEgg
+            ? { intent: 'query' as const, rewrittenQuery: query }  // 强制走 RAG
+            : await classifyIntent(query, messages);                // 正常分类
+
+        console.log('[API] Intent:', intent, isEasterEgg ? '(Easter Egg)' : '');
         console.log('[API] Original query:', query);
         console.log('[API] Rewritten query:', rewrittenQuery);
 
@@ -107,6 +114,7 @@ export async function POST(request: Request) {
                         rerank_score: r.rerank_score,
                         documentId: documentId,
                         chunkIndex: r.metadata?.chunk_index as number | undefined,
+                        customImageUrl: r.metadata?.custom_image_url as string | undefined,
                         // @deprecated: 下载功能已移除，直接设为 undefined
                         downloadUrl: undefined,
                     };
@@ -146,8 +154,19 @@ export async function POST(request: Request) {
         }
 
         // 4. 构建 System Prompt（根据意图不同）
-        const systemPrompt = intent === 'query'
-            ? `你是一个专业的校园问答助手，负责回答学生关于学校规章制度、服务设施等问题。
+        let systemPrompt: string;
+
+        if (isEasterEgg) {
+            // 🥚 彩蛋专用 System Prompt：严格按资料回复
+            systemPrompt = `你是"巴克特"问答助手。用户询问了关于"巴克特"的问题。
+
+请**严格按照以下参考资料的原文内容**回答，不要添加、修改或解释。其中技能用markdown表格展示。
+
+## 参考资料
+${context}`;
+        } else if (intent === 'query') {
+            // 正常 RAG 查询
+            systemPrompt = `你是一个专业的校园问答助手，负责回答学生关于学校规章制度、服务设施等问题。
 
 请严格根据以下参考资料回答问题。禁止使用参考资料之外的信息，禁止胡编乱造。
 
@@ -158,9 +177,12 @@ ${context}
 1. 只能使用参考资料中的内容回答
 2. **引用标注**：在回答中使用 [1]、[2] 等脚注标注引用来源，对应参考资料的编号
 3. 如果涉及具体流程，请分步骤说明
-4. 可以使用 Markdown 格式（列表、表格等）`
-            : `你是一个友好的校园助手"巴克特"。用户正在和你闲聊，请用轻松友好的语气回复。
+4. 可以使用 Markdown 格式（列表、表格等）`;
+        } else {
+            // 闲聊模式
+            systemPrompt = `你是一个友好的校园助手"巴克特"。用户正在和你闲聊，请用轻松友好的语气回复。
 回复要简短、自然，不要过于正式。可以适当使用 emoji 表情。`;
+        }
 
 
         // 4. 构建聊天消息
