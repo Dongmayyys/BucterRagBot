@@ -28,7 +28,10 @@ interface UIMessage {
     parts?: { type: string; text?: string }[];
 }
 
-type Intent = 'query' | 'chat' | 'error';
+// 意图类型
+type Intent = 'query' | 'chat' | 'angry';
+type IntentResult = { intent: Intent; rewrittenQuery: string };
+
 
 export async function POST(request: Request) {
     console.log('[API] Received chat request');
@@ -141,6 +144,29 @@ export async function POST(request: Request) {
                     const headerLine = JSON.stringify({ intent, citations: [] }) + '\n---STREAM_START---\n';
                     controller.enqueue(encoder.encode(headerLine));
                     controller.enqueue(encoder.encode(fallbackMessage));
+                    controller.close();
+                },
+            });
+
+            return new Response(stream, {
+                headers: {
+                    'Content-Type': 'text/plain; charset=utf-8',
+                    'Transfer-Encoding': 'chunked',
+                },
+            });
+        }
+
+        // ★ 3.5. 用户生气时返回固定安慰文本
+        if (intent === 'angry') {
+            console.log('[API] User is angry, returning comfort message');
+            const comfortMessage = `你说得对，但巴克特是《铠甲勇士刑天》中的一名反派角色。`;
+
+            const encoder = new TextEncoder();
+            const stream = new ReadableStream({
+                start(controller) {
+                    const headerLine = JSON.stringify({ intent, citations: [] }) + '\n---STREAM_START---\n';
+                    controller.enqueue(encoder.encode(headerLine));
+                    controller.enqueue(encoder.encode(comfortMessage));
                     controller.close();
                 },
             });
@@ -329,11 +355,6 @@ AI 服务有速率限制，请稍等片刻再试。`;
  * 意图分类 + Query Rewriting（融合对话历史）
  * 返回 { intent, rewrittenQuery }
  */
-interface IntentResult {
-    intent: Intent;
-    rewrittenQuery: string;
-}
-
 async function classifyIntent(query: string, messages: UIMessage[]): Promise<IntentResult> {
     // 构建对话历史（最近 4 轮，不含最后一条）
     const historyMessages = messages.slice(-5, -1);
@@ -347,11 +368,12 @@ async function classifyIntent(query: string, messages: UIMessage[]): Promise<Int
 
     const classifyPrompt = `结合对话历史，分析用户最新输入，返回 JSON（不要有其他内容）：
 {
-  "intent": "query" 或 "chat",
+  "intent": "query" 或 "chat" 或 "angry",
   "rewritten_query": "优化后的检索查询（融合上下文，生成独立的检索语句）"
 }
 
 判断规则：
+- 如果用户表达不满、生气、愤怒（如：垃圾、什么破、太烂、无语、崩溃等）→ intent: "angry"
 - 如果用户在询问学校相关的问题（规章制度、设施、流程、课程等）→ intent: "query"
 - 如果用户只是闲聊、打招呼或问与学校无关的问题 → intent: "chat"
 
@@ -394,7 +416,9 @@ ${historyText}
             const jsonMatch = content.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
                 const parsed = JSON.parse(jsonMatch[0]);
-                const intent: Intent = parsed.intent === 'chat' ? 'chat' : 'query';
+                const intent: Intent =
+                    parsed.intent === 'angry' ? 'angry' :
+                        parsed.intent === 'chat' ? 'chat' : 'query';
                 const rewrittenQuery = parsed.rewritten_query || query;
 
                 console.log('[Intent] Parsed result:', { intent, rewrittenQuery });
