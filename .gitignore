@@ -40,3 +40,5 @@ coverage/
 # 其他
 *.bak
 tmp/
+data/
+snapshots/
