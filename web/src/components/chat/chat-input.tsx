@@ -79,12 +79,11 @@ export function ChatInput({
                             onChange={(e) => setInput(e.target.value)}
                             onKeyDown={handleKeyDown}
                             placeholder={placeholder}
-                            disabled={isLoading}
                             rows={1}
                             className={cn(
                                 'flex-1 resize-none bg-transparent px-2 py-1.5',
                                 'text-sm placeholder:text-muted-foreground',
-                                'focus:outline-none disabled:opacity-50',
+                                'focus:outline-none',
                                 'min-h-[36px] max-h-[200px]'
                             )}
                         />

@@ -66,7 +66,7 @@ export function SourceBubble({ citations, onCitationClick }: SourceBubbleProps) 
                         </TooltipTrigger>
                         <TooltipContent
                             side="top"
-                            className="max-w-md p-3 text-sm"
+                            className="max-w-md p-3 text-sm hidden md:block"
                             sideOffset={5}
                         >
                             <div className="space-y-1.5">

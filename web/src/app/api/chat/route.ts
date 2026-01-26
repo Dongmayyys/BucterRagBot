@@ -129,7 +129,7 @@ export async function POST(request: Request) {
         // ★ 3. 无检索结果时直接返回道歉信息（防止幻觉）
         if (intent === 'query' && citations.length === 0) {
             console.log('[API] No citations found, returning fallback message');
-            const fallbackMessage = `抱歉，我没有找到与您问题相关的资料 😅
+            const fallbackMessage = `抱歉，没有找到相关的资料🤐
 
 您可以尝试：
 - 换一种方式描述问题
@@ -159,7 +159,7 @@ export async function POST(request: Request) {
         // ★ 3.5. 用户生气时返回固定安慰文本
         if (intent === 'angry') {
             console.log('[API] User is angry, returning comfort message');
-            const comfortMessage = `你说得对，但巴克特是《铠甲勇士刑天》中的一名反派角色。`;
+            const comfortMessage = `你说得对，但巴克特是《铠甲勇士刑天》中的一名反派角色，实力较强。`;
 
             const encoder = new TextEncoder();
             const stream = new ReadableStream({
@@ -252,7 +252,7 @@ ${context}
                 ? `抱歉，响应超时了 ⏳
 
 AI 服务器正在繁忙，请稍后重试。`
-                : `抱歉，连接 AI 服务失败 😢
+                : `抱歉，连接 AI 服务失败 😵
 
 可能的原因：
 - 网络连接不稳定
@@ -269,7 +269,7 @@ AI 服务器正在繁忙，请稍后重试。`
             console.error('[API] LLM API error:', errorText);
 
             // 解析错误类型
-            let userMessage = `抱歉，AI 服务出现问题 😢
+            let userMessage = `抱歉，AI 服务出现问题 😵
 
 请稍后重试，或联系管理员。`;
 
@@ -347,7 +347,7 @@ AI 服务有速率限制，请稍等片刻再试。`;
         });
     } catch (error) {
         console.error('[API] Chat API error:', error);
-        return createErrorStream('抱歉，服务器开小差了 😢\n\n请稍后重试，或联系管理员。');
+        return createErrorStream('抱歉，服务器开小差了 😵\n\n请稍后重试，或联系管理员。');
     }
 }
 

@@ -8,7 +8,6 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useState, useEffect } from 'react';
 
 interface ChatHeaderProps {
     onNewChat?: () => void;
@@ -17,15 +16,6 @@ interface ChatHeaderProps {
 }
 
 export function ChatHeader({ onNewChat, hasMessages = false, onShowCredits }: ChatHeaderProps) {
-    const [isMobile, setIsMobile] = useState(false);
-
-    useEffect(() => {
-        const checkMobile = () => setIsMobile(window.innerWidth < 768);
-        checkMobile();
-        window.addEventListener('resize', checkMobile);
-        return () => window.removeEventListener('resize', checkMobile);
-    }, []);
-
     const actionButtons = [
         { icon: Sun, label: '主题切换', onClick: () => { }, disabled: true },
         { icon: Upload, label: '上传资料', onClick: () => { }, disabled: true },
@@ -43,14 +33,15 @@ export function ChatHeader({ onNewChat, hasMessages = false, onShowCredits }: Ch
                 className="gap-1.5"
             >
                 <Plus className="h-4 w-4" />
-                <span>新对话</span>
+                <span className="hidden md:inline">新对话</span>
             </Button>
 
             {/* 中间：标题 */}
-            <h1 className="font-semibold text-lg absolute left-1/2 -translate-x-1/2">校园智能问答</h1>
+            <h1 className="font-semibold text-lg absolute left-1/2 -translate-x-1/2">巴克特的北化生存指南</h1>
 
             {/* 右侧：功能按钮 */}
-            {isMobile ? (
+            {/* 移动端：下拉菜单 */}
+            <div className="md:hidden">
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon">
@@ -72,22 +63,23 @@ export function ChatHeader({ onNewChat, hasMessages = false, onShowCredits }: Ch
                         ))}
                     </DropdownMenuContent>
                 </DropdownMenu>
-            ) : (
-                <div className="flex items-center gap-1">
-                    {actionButtons.map((btn, idx) => (
-                        <Button
-                            key={idx}
-                            variant="ghost"
-                            size="icon"
-                            onClick={btn.onClick}
-                            disabled={btn.disabled}
-                            title={btn.disabled ? `${btn.label}（开发中）` : btn.label}
-                        >
-                            <btn.icon className="h-5 w-5" />
-                        </Button>
-                    ))}
-                </div>
-            )}
+            </div>
+
+            {/* PC 端：水平按钮组 */}
+            <div className="hidden md:flex items-center gap-1">
+                {actionButtons.map((btn, idx) => (
+                    <Button
+                        key={idx}
+                        variant="ghost"
+                        size="icon"
+                        onClick={btn.onClick}
+                        disabled={btn.disabled}
+                        title={btn.disabled ? `${btn.label}（开发中）` : btn.label}
+                    >
+                        <btn.icon className="h-5 w-5" />
+                    </Button>
+                ))}
+            </div>
         </header>
     );
 }

@@ -57,10 +57,9 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
     const greeting = useMemo(() => getGreeting(timeOfDay), [timeOfDay]);
     const subtitle = useMemo(() => getSubtitle(timeOfDay), [timeOfDay]);
 
-    // 彩蛋欢迎语（❤️ 作为末尾 emoji）
+    // 彩蛋欢迎语
     const easterEggGreeting = 'Welcome to BUCT';
     const easterEggSubtitle = 'You found a hidden easter egg!';
-    const easterEggEmoji = '❤️';
 
     // 打字机效果（支持切换）
     const { displayText, isTyping, isDeleting, transitionTo } = useTypewriterWithTransition(greeting, 80);
@@ -83,8 +82,8 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
         return emojiMap[timeOfDay];
     }, [timeOfDay]);
 
-    // 当前显示的 Emoji（彩蛋模式显示 ❓）
-    const currentEmoji = isEasterEgg ? easterEggEmoji : timeEmoji;
+    // 当前显示的 Emoji（彩蛋模式不显示）
+    const currentEmoji = isEasterEgg ? '' : timeEmoji;
 
     // 点击动效配置（使用 Web Animations API）
     const getClickAnimation = useCallback((emoji: string): KeyframeAnimationOptions & { keyframes: Keyframe[] } => {
@@ -259,6 +258,7 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
                         {(isTyping || isDeleting) ? (
                             <span className={`inline-block w-1 sm:w-1.5 h-8 sm:h-12 ${cursorColor} animate-pulse rounded-full`} />
                         ) : (
+                            currentEmoji && (
                             <button
                                 ref={emojiButtonRef}
                                 onClick={handleEmojiClick}
@@ -267,6 +267,7 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
                             >
                                 {currentEmoji}
                             </button>
+                            )
                         )}
                     </h1>
                     <p className="text-muted-foreground text-lg max-w-xl">
