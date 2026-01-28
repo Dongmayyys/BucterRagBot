@@ -66,10 +66,13 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
 
     // 彩蛋状态
     const [isEasterEgg, setIsEasterEgg] = useState(false);
-    const [clickCount, setClickCount] = useState(0);
+    const [isMouthOpen, setIsMouthOpen] = useState(false); // 怪兽张嘴状态
     const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
     const emojiButtonRef = useRef<HTMLButtonElement>(null);
-    const lastClickTimeRef = useRef<number>(0);  // 记录最后点击时间
+    const monsterRef = useRef<HTMLImageElement>(null); // 怪兽图片 ref
+    const isMonsterAnimating = useRef(false); // 怪兽动画防抖
+    const lastClickTimeRef = useRef<number>(0);
+    const clickCountRef = useRef(0); // 点击计数
 
     // 时间段 Emoji 映射
     const timeEmoji = useMemo(() => {
@@ -198,19 +201,22 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
             lastClickTimeRef.current = Date.now();  // 记录点击时间
         }
 
-        // 累加点击计数（使用函数式更新避免闭包问题）
-        setClickCount(prev => {
-            const newCount = prev + 1;
-            console.log('[EasterEgg] clickCount:', newCount);
+        // 累加点击计数
+        clickCountRef.current += 1;
+        console.log('[EasterEgg] clickCount:', clickCountRef.current);
 
-            // 检测彩蛋
-            if (newCount >= 5 && !isEasterEgg) {
-                setIsEasterEgg(true);
-                transitionTo(easterEggGreeting);
-                return 0;  // 重置
-            }
-            return newCount;
-        });
+        // 提前预加载怪兽图片（在接近触发彩蛋时）
+        if (clickCountRef.current === 3) {
+            new Image().src = '/monster.png';
+            new Image().src = '/monster-open.png';
+        }
+
+        // 检测彩蛋（5次触发）
+        if (clickCountRef.current >= 5 && !isEasterEgg) {
+            setIsEasterEgg(true);
+            transitionTo(easterEggGreeting);
+            clickCountRef.current = 0; // 重置
+        }
     }, [getClickAnimation, currentEmoji, isEasterEgg, transitionTo]);
 
     // 空闲动效配置
@@ -259,14 +265,14 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
                             <span className={`inline-block w-1 sm:w-1.5 h-8 sm:h-12 ${cursorColor} animate-pulse rounded-full`} />
                         ) : (
                             currentEmoji && (
-                            <button
-                                ref={emojiButtonRef}
-                                onClick={handleEmojiClick}
-                                className="text-4xl sm:text-5xl cursor-pointer inline-block hover:scale-110 transition-transform"
-                                style={{ transformOrigin: 'center' }}
-                            >
-                                {currentEmoji}
-                            </button>
+                                <button
+                                    ref={emojiButtonRef}
+                                    onClick={handleEmojiClick}
+                                    className="text-4xl sm:text-5xl cursor-pointer inline-block hover:scale-110 transition-transform"
+                                    style={{ transformOrigin: 'center' }}
+                                >
+                                    {currentEmoji}
+                                </button>
                             )
                         )}
                     </h1>
@@ -305,15 +311,63 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
                     </div>
                 )}
 
-                {/* 建议卡片网格 */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-2xl">
-                    {currentSuggestions.map((suggestion, idx) => (
-                        <SuggestionButton
-                            key={idx}
-                            suggestion={suggestion}
-                            onClick={() => onSuggestionClick?.(suggestion.query)}
-                        />
-                    ))}
+                {/* 内容区域 - 固定高度避免切换时抖动 */}
+                <div className="h-[280px] sm:h-[180px] w-full flex items-center justify-center">
+                    {/* 彩蛋模式：显示怪兽 */}
+                    {isEasterEgg ? (
+                        <div className="flex flex-col items-center">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                                ref={monsterRef}
+                                src={isMouthOpen ? "/monster-open.png" : "/monster.png"}
+                                alt="Bucter Monster"
+                                className="w-48 h-48 sm:w-40 sm:h-40 object-contain cursor-pointer"
+                                onClick={() => {
+                                    // 防抖：动画进行中忽略点击
+                                    if (isMonsterAnimating.current) return;
+
+                                    // 播放放大动画，张嘴后再闭嘴
+                                    if (monsterRef.current) {
+                                        isMonsterAnimating.current = true;
+                                        monsterRef.current.animate(
+                                            [
+                                                { transform: 'scale(1)', offset: 0 },
+                                                { transform: 'scale(1.3)', offset: 0.3 },
+                                                { transform: 'scale(1.3)', offset: 0.7 }, // 保持放大
+                                                { transform: 'scale(1)', offset: 1 },
+                                            ],
+                                            { duration: 600, easing: 'ease-in-out' }
+                                        );
+                                        // 放大时张嘴
+                                        setTimeout(() => setIsMouthOpen(true), 180);
+                                        // 缩小后闭嘴，并解锁防抖
+                                        setTimeout(() => {
+                                            setIsMouthOpen(false);
+                                            isMonsterAnimating.current = false;
+                                        }, 600);
+                                    }
+                                }}
+                            />
+                            {/* 酷炫标题 - 可点击发送问题 */}
+                            <button
+                                className="mt-8 text-lg font-semibold text-foreground underline decoration-dashed decoration-2 decoration-purple-800/50 underline-offset-8 hover:decoration-purple-500 transition-colors cursor-pointer"
+                                onClick={() => onSuggestionClick?.('What is Bucter?')}
+                            >
+                                What is Bucter?
+                            </button>
+                        </div>
+                    ) : (
+                        /* 建议卡片网格 */
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-2xl">
+                            {currentSuggestions.map((suggestion, idx) => (
+                                <SuggestionButton
+                                    key={idx}
+                                    suggestion={suggestion}
+                                    onClick={() => onSuggestionClick?.(suggestion.query)}
+                                />
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
         );

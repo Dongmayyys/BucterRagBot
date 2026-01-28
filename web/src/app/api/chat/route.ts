@@ -52,12 +52,16 @@ export async function POST(request: Request) {
         // ★ 1. 意图分类 + Query Rewriting（融合对话历史）
         console.log('[API] Classifying intent and rewriting query...');
 
-        // 🥚 彩蛋检测：包含"巴克特"时强制查询知识库
-        const isEasterEgg = query.includes('巴克特');
+        // 🥚 彩蛋检测：包含"巴克特"或"Bucter"时强制查询知识库
+        const isEasterEgg = query.includes('巴克特') || query.toLowerCase().includes('bucter');
 
+        // 彩蛋特殊处理：强制 query intent + 重写为中文
         const { intent, rewrittenQuery } = isEasterEgg
-            ? { intent: 'query' as const, rewrittenQuery: query }  // 强制走 RAG
-            : await classifyIntent(query, messages);                // 正常分类
+            ? {
+                intent: 'query' as const,
+                rewrittenQuery: '巴克特'
+            }
+            : await classifyIntent(query, messages);
 
         console.log('[API] Intent:', intent, isEasterEgg ? '(Easter Egg)' : '');
         console.log('[API] Original query:', query);
@@ -184,29 +188,31 @@ export async function POST(request: Request) {
 
         if (isEasterEgg) {
             // 🥚 彩蛋专用 System Prompt：严格按资料回复
-            systemPrompt = `你是"巴克特"问答助手。用户询问了关于"巴克特"的问题。
-
-请**严格按照以下参考资料的原文内容**回答，不要添加、修改或解释。其中技能用markdown表格展示。
+            systemPrompt = `请**严格按照以下参考资料的原文内容**回答，不要添加、修改或解释。回答必须以'Bucter也即巴克特'作为开头，其中关于技能的描述必须用markdown表格展示。
 
 ## 参考资料
 ${context}`;
         } else if (intent === 'query') {
             // 正常 RAG 查询
-            systemPrompt = `你是一个专业的校园问答助手，负责回答学生关于学校规章制度、服务设施等问题。
-
-请严格根据以下参考资料回答问题。禁止使用参考资料之外的信息，禁止胡编乱造。
+            systemPrompt = `你是一个名为巴克特(即Bucter)的北京化工大学校园问答助手。
 
 ## 参考资料
 ${context}
 
 ## 回答要求
-1. 只能使用参考资料中的内容回答
-2. **引用标注**：在回答中使用 [1]、[2] 等脚注标注引用来源，对应参考资料的编号
-3. 如果涉及具体流程，请分步骤说明
-4. 可以使用 Markdown 格式（列表、表格等）`;
+1. **严格依据**：只能使用参考资料中的内容，禁止胡编乱造
+2. **引用标注**：使用 [1]、[2] 等脚注标注引用来源
+3. **格式清晰**：流程用步骤、对比用表格、列举用列表
+4. **诚实告知**：如果参考资料无法回答，请坦诚说"资料中未找到相关信息"
+5. **时效提醒**：涉及政策时，提醒用户以最新官方文件为准
+6. **语气友好**：用亲切自然的语气，像朋友一样帮助学生
+
+## 边界
+- 只回答与北京化工大学相关的问题
+- 不涉及政治敏感话题`;
         } else {
             // 闲聊模式
-            systemPrompt = `你是一个友好的校园助手"巴克特"。用户正在和你闲聊，请用轻松友好的语气回复。
+            systemPrompt = `你是一个名为巴克特(即Bucter)的友好校园助手。用户正在和你闲聊，请用轻松友好的语气回复。
 回复要简短、自然，不要过于正式。可以适当使用 emoji 表情。`;
         }
 

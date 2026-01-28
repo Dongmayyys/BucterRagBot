@@ -49,9 +49,9 @@ export interface SuggestionCard {
  * 在对话列表为空时展示，引导用户提问
  */
 export const DEFAULT_SUGGESTIONS: SuggestionCard[] = [
-    { emoji: '🤔', title: '奖学金申请', query: '怎么申请奖学金？' },
-    { emoji: '📚', title: '图书馆开放', query: '图书馆几点闭馆？' },
-    { emoji: '🏥', title: '校医院位置', query: '校医院在哪里？' },
+    { emoji: '💰', title: '奖学金申请', query: '怎么申请奖学金？' },
+    { emoji: '💡', title: '宿舍条例', query: '寝室断电时间？' },
+    { emoji: '🏥', title: '医疗报销', query: '校医院报销哪些项目？' },
     { emoji: '🏃', title: '体育补考', query: '体育补考怎么报名？' },
 ];
 
@@ -60,8 +60,8 @@ export const DEFAULT_SUGGESTIONS: SuggestionCard[] = [
  * 多次点击 Emoji 后触发
  */
 export const EASTER_EGG_SUGGESTIONS: SuggestionCard[] = [
-    { emoji: '🎓', title: 'BUCT 是什么', query: '北京化工大学是什么学校？' },
-    { emoji: '🧪', title: '化工强校', query: '北化有哪些优势学科？' },
+    { emoji: '🎓', title: '关于Bucter', query: 'Bucter是什么意思？' },
+    { emoji: '🧪', title: '四大名捕', query: '北化四大名捕是哪几位？' },
     { emoji: '🌸', title: '最美校园', query: '校园里有什么好看的风景？' },
     { emoji: '🍜', title: '食堂推荐', query: '食堂哪家好吃？' },
 ];
@@ -71,8 +71,8 @@ export const EASTER_EGG_SUGGESTIONS: SuggestionCard[] = [
  * 凌晨 2-8 点显示
  */
 export const NIGHT_OWL_SUGGESTIONS: SuggestionCard[] = [
-    { emoji: '📖', title: 'Library Hours', query: "What time does the classroom close?" },
-    { emoji: '☕', title: 'Late Night Cafe', query: "Where can I grab a coffee on campus?" },
-    { emoji: '🛏️', title: 'Dorm Rules', query: "What are the dormitory quiet hours?" },
-    { emoji: '🚌', title: 'Night Bus', query: "Is there a night shuttle service?" },
+    { emoji: '💰', title: 'Scholarships', query: 'How to apply for scholarships?' },
+    { emoji: '💡', title: 'Dorm Rules', query: 'When does the dorm power off?' },
+    { emoji: '🏥', title: 'Medical Reimbursement', query: 'What items can be reimbursed at the clinic?' },
+    { emoji: '🏃', title: 'PE Makeup Exam', query: 'How to sign up for PE makeup exam?' },
 ];

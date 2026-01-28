@@ -74,11 +74,11 @@ export function CreditsDialog({ open, onOpenChange }: CreditsDialogProps) {
                         <ul className="grid grid-cols-2 gap-2 text-muted-foreground">
                             <li className="bg-muted/30 p-2 rounded text-xs flex flex-col items-center justify-center gap-0.5">
                                 <span className="font-medium text-foreground">Supabase</span>
-                                <span className="text-[10px] text-muted-foreground/80">数据库</span>
+                                <span className="text-[10px] text-muted-foreground/80">向量数据库</span>
                             </li>
                             <li className="bg-muted/30 p-2 rounded text-xs flex flex-col items-center justify-center gap-0.5">
                                 <span className="font-medium text-foreground">Zeabur</span>
-                                <span className="text-[10px] text-muted-foreground/80">前端托管</span>
+                                <span className="text-[10px] text-muted-foreground/80">服务器托管</span>
                             </li>
                         </ul>
                     </div>
