@@ -14,13 +14,29 @@ import { Citation } from '@/lib/types';
  * 5. 返回流式文本响应
  */
 
-// SiliconFlow 配置 (仅用于 Embedding)
+// SiliconFlow 配置
+const SILICONFLOW_BASE_URL = process.env.SILICONFLOW_BASE_URL || 'https://api.siliconflow.cn/v1';
 const siliconflow = createOpenAI({
-    baseURL: 'https://api.siliconflow.cn/v1',
+    baseURL: SILICONFLOW_BASE_URL,
     apiKey: process.env.SILICONFLOW_API_KEY || '',
 });
 
-const embeddingModel = siliconflow.textEmbeddingModel('BAAI/bge-m3');
+// 模型配置
+const LLM_MODEL = process.env.LLM_MODEL || 'Qwen/Qwen3-8B';
+const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || 'BAAI/bge-m3';
+const RERANK_MODEL = process.env.RERANK_MODEL || 'BAAI/bge-reranker-v2-m3';
+
+// RAG 参数
+const SEARCH_MATCH_COUNT = parseInt(process.env.SEARCH_MATCH_COUNT || '20');
+const RERANK_TOP_N = parseInt(process.env.RERANK_TOP_N || '6');
+const RERANK_THRESHOLD = parseFloat(process.env.RERANK_THRESHOLD || '0.15');
+
+// LLM 参数
+const LLM_TIMEOUT_MS = parseInt(process.env.LLM_TIMEOUT_MS || '20000');
+const TEMPERATURE_QUERY = parseFloat(process.env.TEMPERATURE_QUERY || '0.3');
+const TEMPERATURE_CHAT = parseFloat(process.env.TEMPERATURE_CHAT || '0.7');
+
+const embeddingModel = siliconflow.textEmbeddingModel(EMBEDDING_MODEL);
 
 interface UIMessage {
     id: string;
@@ -34,7 +50,7 @@ type IntentResult = { intent: Intent; rewrittenQuery: string };
 
 
 export async function POST(request: Request) {
-    console.log('[API] Received chat request');
+    const startTime = Date.now();
 
     try {
         const body = await request.json();
@@ -43,14 +59,14 @@ export async function POST(request: Request) {
         // 从最后一条用户消息中提取查询文本
         const lastMessage = messages[messages.length - 1];
         const query = extractTextFromMessage(lastMessage);
-        console.log('[API] Extracted query:', query);
+        console.log(`📥 Query: "${query}"`);
 
         if (!query) {
             return createErrorStream('抱歉，消息内容为空 😅\n\n请输入您的问题。');
         }
 
         // ★ 1. 意图分类 + Query Rewriting（融合对话历史）
-        console.log('[API] Classifying intent and rewriting query...');
+        const intentStartTime = Date.now();
 
         // 🥚 彩蛋检测：包含"巴克特"或"Bucter"时强制查询知识库
         const isEasterEgg = query.includes('巴克特') || query.toLowerCase().includes('bucter');
@@ -63,39 +79,34 @@ export async function POST(request: Request) {
             }
             : await classifyIntent(query, messages);
 
-        console.log('[API] Intent:', intent, isEasterEgg ? '(Easter Egg)' : '');
-        console.log('[API] Original query:', query);
-        console.log('[API] Rewritten query:', rewrittenQuery);
+        console.log(`🎯 Intent: ${intent}${isEasterEgg ? ' (Easter Egg)' : ''}, Rewritten: "${rewrittenQuery}" [${Date.now() - intentStartTime}ms]`);
 
         let context = '';
         let citations: Citation[] = [];
 
         // ★ 2. 根据意图决定是否检索
         if (intent === 'query') {
+            const retrieveStartTime = Date.now();
+
             // 2a. 生成查询向量（使用改写后的 query）
-            console.log('[API] Generating embedding...');
             const { embedding: queryEmbedding } = await embed({
                 model: embeddingModel,
-                value: rewrittenQuery,  // ★ 使用改写后的 query
+                value: rewrittenQuery,
             });
-            console.log('[API] Embedding generated, length:', queryEmbedding.length);
 
-            // 2b. 向量检索 (获取 Top 20)
-            console.log('[API] Performing vector search...');
+            // 2b. 向量检索
             const searchResults = await vectorSearch(queryEmbedding, {
-                matchCount: 20,
+                matchCount: SEARCH_MATCH_COUNT,
                 matchThreshold: 0.3,
             });
-            console.log('[API] Search results count:', searchResults.length);
 
-            // 2c. Rerank 精排 (获取 Top 6)，使用改写后的 query
-            console.log('[API] Reranking...');
-            const rankedResults = await rerank(rewrittenQuery, searchResults, 6);  // ★ 使用改写后的 query
-            console.log('[API] Reranked results count:', rankedResults.length);
+            // 2c. Rerank 精排
+            const rankedResults = await rerank(rewrittenQuery, searchResults, RERANK_TOP_N);
 
-            // 2d. 过滤低分结果 (rerank_score < 0.15 不显示)
-            const filteredResults = rankedResults.filter(r => (r.rerank_score ?? 0) >= 0.15);
-            console.log('[API] Filtered results count (>=15%):', filteredResults.length);
+            // 2d. 过滤低分结果
+            const filteredResults = rankedResults.filter(r => (r.rerank_score ?? 0) >= RERANK_THRESHOLD);
+
+            console.log(`🔍 Retrieve: ${searchResults.length} → ${rankedResults.length} → ${filteredResults.length} citations [${Date.now() - retrieveStartTime}ms]`);
 
             // 2e. 构建 Context（带编号，供 LLM 使用）
             context = filteredResults
@@ -127,12 +138,12 @@ export async function POST(request: Request) {
                     };
                 })
             );
-            console.log('[API] Citations count:', citations.length);
+            // citations.length 已在上方 Retrieve 日志中输出
         }
 
         // ★ 3. 无检索结果时直接返回道歉信息（防止幻觉）
         if (intent === 'query' && citations.length === 0) {
-            console.log('[API] No citations found, returning fallback message');
+            console.log('⚠️ No citations found, returning fallback');
             const fallbackMessage = `抱歉，没有找到相关的资料🤐
 
 您可以尝试：
@@ -162,7 +173,7 @@ export async function POST(request: Request) {
 
         // ★ 3.5. 用户生气时返回固定安慰文本
         if (intent === 'angry') {
-            console.log('[API] User is angry, returning comfort message');
+            console.log('😡 User is angry, returning comfort message');
             const comfortMessage = `你说得对，但巴克特是《铠甲勇士刑天》中的一名反派角色，实力较强。`;
 
             const encoder = new TextEncoder();
@@ -227,11 +238,11 @@ ${context}
         ];
 
         // 5. 调用 LLM（流式，带超时检测）
-        console.log('[API] Calling SiliconFlow Chat Completions API...');
+        console.log('🤖 Generating response...');
 
-        // 创建超时控制器（30秒）
+        // 创建超时控制器
         const timeoutController = new AbortController();
-        const timeoutId = setTimeout(() => timeoutController.abort(), 20000);
+        const timeoutId = setTimeout(() => timeoutController.abort(), LLM_TIMEOUT_MS);
 
         let llmResponse: Response;
         try {
@@ -242,9 +253,10 @@ ${context}
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    model: 'Qwen/Qwen3-8B',
+                    model: LLM_MODEL,
                     messages: chatMessages,
                     stream: true,
+                    temperature: intent === 'chat' ? TEMPERATURE_CHAT : TEMPERATURE_QUERY,
                 }),
                 signal: timeoutController.signal,
             });
@@ -344,7 +356,7 @@ AI 服务有速率限制，请稍等片刻再试。`;
             },
         });
 
-        console.log('[API] Returning stream response');
+        console.log(`✅ Response sent [Total: ${Date.now() - startTime}ms]\n${'─'.repeat(50)}`);
         return new Response(stream, {
             headers: {
                 'Content-Type': 'text/plain; charset=utf-8',
@@ -401,7 +413,7 @@ ${historyText}
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                model: 'Qwen/Qwen3-8B',
+                model: LLM_MODEL,
                 messages: [{ role: 'user', content: classifyPrompt }],
                 max_tokens: 200,
                 temperature: 0,
@@ -427,7 +439,6 @@ ${historyText}
                         parsed.intent === 'chat' ? 'chat' : 'query';
                 const rewrittenQuery = parsed.rewritten_query || query;
 
-                console.log('[Intent] Parsed result:', { intent, rewrittenQuery });
                 return { intent, rewrittenQuery };
             }
         } catch (parseError) {
@@ -477,7 +488,7 @@ async function rerank(
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                model: 'BAAI/bge-reranker-v2-m3',
+                model: RERANK_MODEL,
                 query,
                 documents: docTexts,
                 top_n: topK,
