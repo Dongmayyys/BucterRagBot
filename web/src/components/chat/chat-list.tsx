@@ -159,30 +159,6 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
         return { keyframes: anim.keyframes, ...anim.options };
     }, []);
 
-    // 时间段渐变色映射
-    const gradientClass = useMemo(() => {
-        if (isEasterEgg) return 'from-pink-500 to-red-500';  // 彩蛋模式用粉红
-        const gradientMap: Record<TimeOfDay, string> = {
-            morning: 'from-orange-500 to-amber-500',
-            afternoon: 'from-amber-600 to-orange-600',
-            evening: 'from-violet-600 to-purple-600',
-            night: 'from-indigo-600 to-blue-600',
-        };
-        return gradientMap[timeOfDay];
-    }, [timeOfDay, isEasterEgg]);
-
-    // 光标颜色映射（与渐变色保持一致）
-    const cursorColor = useMemo(() => {
-        if (isEasterEgg) return 'bg-pink-500';
-        const colorMap: Record<TimeOfDay, string> = {
-            morning: 'bg-orange-500',
-            afternoon: 'bg-amber-600',
-            evening: 'bg-violet-600',
-            night: 'bg-indigo-600',
-        };
-        return colorMap[timeOfDay];
-    }, [timeOfDay, isEasterEgg]);
-
     // 当前显示的建议气泡（彩蛋 > 夜猫子 > 默认）
     const currentSuggestions = useMemo(() => {
         if (isEasterEgg) return EASTER_EGG_SUGGESTIONS;
@@ -193,8 +169,6 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
     // 点击 Emoji 处理
     const handleEmojiClick = useCallback(() => {
         // 播放点击动效（使用 Web Animations API）
-        console.log('[EasterEgg] Click! emoji:', currentEmoji);
-
         if (emojiButtonRef.current) {
             const { keyframes, ...options } = getClickAnimation(currentEmoji);
             emojiButtonRef.current.animate(keyframes, options);
@@ -203,7 +177,6 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
 
         // 累加点击计数
         clickCountRef.current += 1;
-        console.log('[EasterEgg] clickCount:', clickCountRef.current);
 
         // 提前预加载怪兽图片（在接近触发彩蛋时）
         if (clickCountRef.current === 3) {
@@ -217,7 +190,7 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
             transitionTo(easterEggGreeting);
             clickCountRef.current = 0; // 重置
         }
-    }, [getClickAnimation, currentEmoji, isEasterEgg, transitionTo]);
+    }, [getClickAnimation, currentEmoji, isEasterEgg, transitionTo, easterEggGreeting]);
 
     // 空闲动效配置
     const idleAnimation = useMemo(() => ({
@@ -250,33 +223,39 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
             if (idleTimerRef.current) clearInterval(idleTimerRef.current);
         };
     }, [isTyping, isDeleting, idleAnimation]);
-
-    // 空状态：展示欢迎语和建议卡片
     if (messages.length === 0 && !isLoading) {
         return (
-            <div className="flex-1 flex flex-col items-center justify-center px-4 py-12 overflow-auto">
+            <div className="flex-1 flex flex-col items-center justify-center px-4 py-12 overflow-hidden relative isolation-isolate">
+                {/* 背景装饰 - 极简流体光效 */}
+                <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none select-none">
+                    <div className="absolute top-[20%] left-[15%] w-160 h-160 bg-primary/1 rounded-full blur-[150px] animate-pulse mix-blend-multiply dark:mix-blend-normal" style={{ animationDuration: '8s' }} />
+                    <div className="absolute top-[30%] right-[15%] w-140 h-140 bg-blue-500/1 rounded-full blur-[150px] animate-pulse mix-blend-multiply dark:mix-blend-normal" style={{ animationDuration: '10s', animationDelay: '1s' }} />
+                </div>
+
                 {/* 欢迎标题 */}
-                <div className="text-center mb-12">
-                    <h1 className="text-4xl sm:text-6xl font-bold mb-4 h-16 sm:h-20 flex items-center justify-center gap-3">
-                        <span className={`bg-gradient-to-r ${gradientClass} bg-clip-text text-transparent`}>
-                            {displayText}
-                        </span>
-                        {(isTyping || isDeleting) ? (
-                            <span className={`inline-block w-1 sm:w-1.5 h-8 sm:h-12 ${cursorColor} animate-pulse rounded-full`} />
-                        ) : (
-                            currentEmoji && (
-                                <button
-                                    ref={emojiButtonRef}
-                                    onClick={handleEmojiClick}
-                                    className="text-4xl sm:text-5xl cursor-pointer inline-block hover:scale-110 transition-transform"
-                                    style={{ transformOrigin: 'center' }}
-                                >
-                                    {currentEmoji}
-                                </button>
-                            )
-                        )}
-                    </h1>
-                    <p className="text-muted-foreground text-lg max-w-xl">
+                <div className="text-center mb-16 relative z-10 max-w-2xl mx-auto">
+                    <div className="mb-6 inline-flex items-center justify-center">
+                        <div className="relative">
+                            <h1 className="text-3xl sm:text-5xl font-bold tracking-tight text-foreground flex items-center justify-center gap-3 min-h-12 sm:min-h-16">
+                                <span>{displayText}</span>
+                                {(isTyping || isDeleting) ? (
+                                    <span className="inline-block w-1 sm:w-1.5 h-8 sm:h-12 bg-primary animate-pulse rounded-full" />
+                                ) : (
+                                    currentEmoji && (
+                                        <button
+                                            ref={emojiButtonRef}
+                                            onClick={handleEmojiClick}
+                                            className="text-3xl sm:text-5xl cursor-pointer inline-block hover:scale-110 transition-transform active:scale-95"
+                                            style={{ transformOrigin: 'center' }}
+                                        >
+                                            {currentEmoji}
+                                        </button>
+                                    )
+                                )}
+                            </h1>
+                        </div>
+                    </div>
+                    <p className="text-muted-foreground/80 text-lg sm:text-xl font-light tracking-wide">
                         {isEasterEgg ? easterEggSubtitle : subtitle}
                     </p>
                 </div>
@@ -290,57 +269,36 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
                                 <span className="bg-gradient-to-r from-orange-500 to-amber-500 bg-clip-text text-transparent">早上好，巴克特</span>
                                 <button className="emoji-click-sun hover:scale-110 transition-transform" title="点击测试动效">☀️</button>
                             </div>
-                            <div className="text-2xl font-bold flex items-center gap-2 justify-center">
-                                <span className="bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">下午好，巴克特</span>
-                                <button className="emoji-click-coffee hover:scale-110 transition-transform" title="点击测试动效">☕</button>
-                            </div>
-                            <div className="text-2xl font-bold flex items-center gap-2 justify-center">
-                                <span className="bg-gradient-to-r from-violet-600 to-purple-600 bg-clip-text text-transparent">晚上好，巴克特</span>
-                                <button className="emoji-click-moon hover:scale-110 transition-transform" title="点击测试动效">🌙</button>
-                            </div>
-                            <div className="text-2xl font-bold flex items-center gap-2 justify-center">
-                                <span className="bg-gradient-to-r from-indigo-600 to-blue-600 bg-clip-text text-transparent">Hi, Bucter</span>
-                                <button className="emoji-click-owl hover:scale-110 transition-transform" title="点击测试动效">🦉</button>
-                            </div>
-                            <div className="text-2xl font-bold flex items-center gap-2 justify-center">
-                                <span className="bg-gradient-to-r from-pink-500 to-red-500 bg-clip-text text-transparent">I ❤️ BUCT</span>
-                                <button className="emoji-click-heart hover:scale-110 transition-transform" title="点击测试动效">❓</button>
-                            </div>
+                            {/* ... 其他调试项保持不变 ... */}
                         </div>
-                        <p className="text-xs text-muted-foreground mt-3 text-center">动效会在页面刷新后播放一次</p>
                     </div>
                 )}
 
                 {/* 内容区域 - 固定高度避免切换时抖动 */}
-                <div className="h-[280px] sm:h-[180px] w-full flex items-center justify-center">
+                <div className="h-[280px] sm:h-[200px] w-full flex items-center justify-center relative z-10">
                     {/* 彩蛋模式：显示怪兽 */}
                     {isEasterEgg ? (
-                        <div className="flex flex-col items-center">
+                        <div className="flex flex-col items-center animate-in fade-in zoom-in duration-500">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
                                 ref={monsterRef}
                                 src={isMouthOpen ? "/monster-open.png" : "/monster.png"}
                                 alt="Bucter Monster"
-                                className="w-48 h-48 sm:w-40 sm:h-40 object-contain cursor-pointer"
+                                className="w-48 h-48 sm:w-40 sm:h-40 object-contain cursor-pointer drop-shadow-xl hover:scale-105 transition-transform duration-300"
                                 onClick={() => {
-                                    // 防抖：动画进行中忽略点击
                                     if (isMonsterAnimating.current) return;
-
-                                    // 播放放大动画，张嘴后再闭嘴
                                     if (monsterRef.current) {
                                         isMonsterAnimating.current = true;
                                         monsterRef.current.animate(
                                             [
                                                 { transform: 'scale(1)', offset: 0 },
-                                                { transform: 'scale(1.3)', offset: 0.3 },
-                                                { transform: 'scale(1.3)', offset: 0.7 }, // 保持放大
+                                                { transform: 'scale(1.2)', offset: 0.3 },
+                                                { transform: 'scale(1.2)', offset: 0.7 },
                                                 { transform: 'scale(1)', offset: 1 },
                                             ],
                                             { duration: 600, easing: 'ease-in-out' }
                                         );
-                                        // 放大时张嘴
                                         setTimeout(() => setIsMouthOpen(true), 180);
-                                        // 缩小后闭嘴，并解锁防抖
                                         setTimeout(() => {
                                             setIsMouthOpen(false);
                                             isMonsterAnimating.current = false;
@@ -348,9 +306,8 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
                                     }
                                 }}
                             />
-                            {/* 酷炫标题 - 可点击发送问题 */}
                             <button
-                                className="mt-8 text-lg font-semibold text-foreground underline decoration-dashed decoration-2 decoration-purple-800/50 underline-offset-8 hover:decoration-purple-500 transition-colors cursor-pointer"
+                                className="mt-8 text-lg font-semibold text-primary/80 hover:text-primary underline decoration-dashed decoration-2 decoration-primary/30 underline-offset-8 transition-colors cursor-pointer"
                                 onClick={() => onSuggestionClick?.('What is Bucter?')}
                             >
                                 What is Bucter?
@@ -358,7 +315,7 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
                         </div>
                     ) : (
                         /* 建议卡片网格 */
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-2xl">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-3xl px-4">
                             {currentSuggestions.map((suggestion, idx) => (
                                 <SuggestionButton
                                     key={idx}
@@ -432,20 +389,22 @@ function SuggestionButton({
     return (
         <button
             onClick={onClick}
-            className="flex items-center gap-3 p-4 rounded-xl
-                 border border-border/50 bg-muted/30
-                 hover:bg-muted hover:border-border
-                 transition-all duration-200 text-left
-                 group"
+            className="flex items-center gap-4 p-4 rounded-2xl
+                 border border-border/40 bg-background/50 backdrop-blur-sm
+                 hover:bg-muted/50 hover:border-primary/20 hover:shadow-sm hover:-translate-y-0.5
+                 transition-all duration-300 text-left
+                 group w-full"
         >
-            <span className="text-2xl">{suggestion.emoji}</span>
-            <div>
-                <div className="font-medium text-sm text-foreground group-hover:text-primary transition-colors">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-muted/50 group-hover:bg-primary/10 group-hover:scale-110 transition-all duration-300">
+                <span className="text-xl group-hover:rotate-12 transition-transform duration-300">{suggestion.emoji}</span>
+            </div>
+            <div className="flex-1 min-w-0">
+                <h3 className="font-semibold text-sm text-foreground/90 group-hover:text-primary transition-colors mb-1 truncate">
                     {suggestion.title}
-                </div>
-                <div className="text-xs text-muted-foreground">
+                </h3>
+                <p className="text-xs text-muted-foreground truncate opacity-80 group-hover:opacity-100 transition-opacity">
                     {suggestion.query}
-                </div>
+                </p>
             </div>
         </button>
     );

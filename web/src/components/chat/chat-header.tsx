@@ -37,7 +37,18 @@ export function ChatHeader({ onNewChat, hasMessages = false, onShowCredits }: Ch
             </Button>
 
             {/* 中间：标题 */}
-            <h1 className="font-semibold text-lg absolute left-1/2 -translate-x-1/2">巴克特的北化生存指南</h1>
+            {/* 中间：标题 */}
+            {/* 中间：标题 */}
+            <div className="absolute left-1/2 -translate-x-1/2">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-border/40 bg-muted/20 backdrop-blur-md shadow-sm select-none transition-colors hover:bg-muted/30 hover:border-border/60">
+                    <span className="text-sm font-medium text-foreground/90 tracking-wide">
+                        巴克特的北化生存指南
+                    </span>
+                    <div className="hidden sm:flex h-4 items-center justify-center rounded-full bg-primary/10 px-1.5 text-[9px] font-bold text-primary ring-1 ring-inset ring-primary/20">
+                        RAG
+                    </div>
+                </div>
+            </div>
 
             {/* 右侧：功能按钮 */}
             {/* 移动端：下拉菜单 */}
