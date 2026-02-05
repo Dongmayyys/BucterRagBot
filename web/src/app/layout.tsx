@@ -12,6 +12,8 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+import { ThemeProvider } from "@/components/theme-provider";
+
 export const metadata: Metadata = {
   title: "巴克特的北化生存指南",
   description: "基于 RAG 的北京化工大学校园知识问答系统，快速查询学校规章制度、服务设施等信息",
@@ -23,11 +25,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );
