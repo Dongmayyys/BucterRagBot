@@ -71,8 +71,8 @@ export const EASTER_EGG_SUGGESTIONS: SuggestionCard[] = [
  * 凌晨 2-8 点显示
  */
 export const NIGHT_OWL_SUGGESTIONS: SuggestionCard[] = [
-    { emoji: '💰', title: 'Scholarships', query: 'How to apply for scholarships?' },
-    { emoji: '💡', title: 'Dorm Rules', query: 'When does the dorm power off?' },
-    { emoji: '🏥', title: 'Medical Reimbursement', query: 'What items can be reimbursed at the clinic?' },
-    { emoji: '🏃', title: 'PE Makeup Exam', query: 'How to sign up for PE makeup exam?' },
+    { emoji: '💰', title: 'Scholarships', query: 'How do I apply for a scholarship?' },
+    { emoji: '💡', title: 'Dorm Rules', query: 'When is the electricity cut off in the dorms?' },
+    { emoji: '🏥', title: 'Medical Reimbursement', query: 'What medical expenses are reimbursable?' },
+    { emoji: '🏃', title: 'PE Make-up Exam', query: 'How do I register for the PE make-up exam?' },
 ];
