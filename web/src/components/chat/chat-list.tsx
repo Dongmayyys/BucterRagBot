@@ -27,12 +27,25 @@ interface ChatListProps {
     isChat?: boolean;
     onSuggestionClick?: (query: string) => void;
     onCitationClick?: (citation: Citation) => void;
+    // 彩蛋状态控制（提升到父组件以控制输入框显隐）
+    isEasterEgg?: boolean;
+    onEasterEggChange?: (isActive: boolean) => void;
 }
 
 // 🔧 调试开关：设为 false 关闭调试区域（生产构建自动移除）
 const DEBUG_UI = false;
 
-export function ChatList({ messages, isLoading, phase = 'idle', hasResults = true, isChat = false, onSuggestionClick, onCitationClick }: ChatListProps) {
+export function ChatList({
+    messages,
+    isLoading,
+    phase = 'idle',
+    hasResults = true,
+    isChat = false,
+    onSuggestionClick,
+    onCitationClick,
+    isEasterEgg: propIsEasterEgg,
+    onEasterEggChange
+}: ChatListProps) {
     // 智能滚底 Hook
     const [containerRef, endRef, isAtBottom, scrollToBottom, hasUnread, markUnread] = useScrollToBottom<HTMLDivElement>(isLoading);
 
@@ -64,8 +77,14 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
     // 打字机效果（支持切换）
     const { displayText, isTyping, isDeleting, transitionTo } = useTypewriterWithTransition(greeting, 80);
 
-    // 彩蛋状态
-    const [isEasterEgg, setIsEasterEgg] = useState(false);
+    // 彩蛋状态（混合状态：优先使用 prop，否则使用 local state）
+    const [localIsEasterEgg, setLocalIsEasterEgg] = useState(false);
+    const isEasterEgg = propIsEasterEgg ?? localIsEasterEgg;
+    const setIsEasterEgg = useCallback((val: boolean) => {
+        setLocalIsEasterEgg(val);
+        onEasterEggChange?.(val);
+    }, [onEasterEggChange]);
+
     const [isMouthOpen, setIsMouthOpen] = useState(false); // 怪兽张嘴状态
     const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
     const emojiButtonRef = useRef<HTMLButtonElement>(null);
@@ -190,7 +209,7 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
             transitionTo(easterEggGreeting);
             clickCountRef.current = 0; // 重置
         }
-    }, [getClickAnimation, currentEmoji, isEasterEgg, transitionTo, easterEggGreeting]);
+    }, [getClickAnimation, currentEmoji, isEasterEgg, transitionTo, easterEggGreeting, setIsEasterEgg]);
 
     // 空闲动效配置
     const idleAnimation = useMemo(() => ({
@@ -225,7 +244,7 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
     }, [isTyping, isDeleting, idleAnimation]);
     if (messages.length === 0 && !isLoading) {
         return (
-            <div className="flex-1 flex flex-col items-center justify-center px-4 py-12 overflow-hidden relative isolation-isolate">
+            <div className="flex-1 flex flex-col items-center justify-start pt-10 sm:pt-[15vh] px-4 overflow-y-auto custom-scrollbar relative isolation-isolate">
                 {/* 背景装饰 - 极简流体光效 */}
                 <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none select-none">
                     <div className="absolute top-[20%] left-[15%] w-160 h-160 bg-primary/1 rounded-full blur-[150px] animate-pulse mix-blend-multiply dark:mix-blend-normal" style={{ animationDuration: '8s' }} />
@@ -233,11 +252,13 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
                 </div>
 
                 {/* 欢迎标题 */}
-                <div className="text-center mb-16 relative z-10 max-w-2xl mx-auto">
+                <div className="text-center mb-12 sm:mb-16 relative z-10 max-w-2xl mx-auto">
                     <div className="mb-6 inline-flex items-center justify-center">
                         <div className="relative">
-                            <h1 className="text-3xl sm:text-5xl font-bold tracking-tight text-foreground flex items-center justify-center gap-3 min-h-12 sm:min-h-16">
-                                <span>{displayText}</span>
+                            <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-foreground flex items-center justify-center gap-3 min-h-12 sm:min-h-16">
+                                <span className={isEasterEgg ? "bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent animate-pulse" : ""}>
+                                    {displayText}
+                                </span>
                                 {(isTyping || isDeleting) ? (
                                     <span className="inline-block w-1 sm:w-1.5 h-8 sm:h-12 bg-primary animate-pulse rounded-full" />
                                 ) : (
@@ -275,7 +296,7 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
                 )}
 
                 {/* 内容区域 - 固定高度避免切换时抖动 */}
-                <div className="h-[280px] sm:h-[200px] w-full flex items-center justify-center relative z-10">
+                <div className={`w-full flex items-center justify-center relative z-10 `}>
                     {/* 彩蛋模式：显示怪兽 */}
                     {isEasterEgg ? (
                         <div className="flex flex-col items-center animate-in fade-in zoom-in duration-500">
@@ -284,7 +305,7 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
                                 ref={monsterRef}
                                 src={isMouthOpen ? "/monster-open.png" : "/monster.png"}
                                 alt="Bucter Monster"
-                                className="w-48 h-48 sm:w-40 sm:h-40 object-contain cursor-pointer drop-shadow-xl hover:scale-105 transition-transform duration-300"
+                                className="w-56 h-56 sm:w-64 sm:h-64 object-contain cursor-pointer drop-shadow-2xl hover:-translate-y-2 hover:scale-105 transition-all duration-500 ease-in-out"
                                 onClick={() => {
                                     if (isMonsterAnimating.current) return;
                                     if (monsterRef.current) {
@@ -307,7 +328,7 @@ export function ChatList({ messages, isLoading, phase = 'idle', hasResults = tru
                                 }}
                             />
                             <button
-                                className="mt-8 text-lg font-semibold text-primary/80 hover:text-primary underline decoration-dashed decoration-2 decoration-primary/30 underline-offset-8 transition-colors cursor-pointer"
+                                className="mt-8 text-lg font-semibold text-primary/80 hover:text-primary underline decoration-dashed decoration-2 decoration-primary/30 underline-offset-8 transition-colors cursor-pointer "
                                 onClick={() => onSuggestionClick?.('What is Bucter?')}
                             >
                                 What is Bucter?

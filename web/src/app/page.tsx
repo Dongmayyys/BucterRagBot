@@ -34,6 +34,9 @@ export default function ChatPage() {
   const [hasResults, setHasResults] = useState(true);
   const [isChat, setIsChat] = useState(false); // 是否为闲聊模式
 
+  // 彩蛋状态（控制输入框显隐）
+  const [isEasterEgg, setIsEasterEgg] = useState(false);
+
   // 用于终止请求的 AbortController
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -41,6 +44,9 @@ export default function ChatPage() {
    * 核心发送逻辑
    */
   const sendMessage = useCallback(async (content: string) => {
+    // 发送消息时退出彩蛋模式
+    setIsEasterEgg(false);
+
     if (!content.trim() || isLoading) return;
 
     setError(null);
@@ -225,6 +231,8 @@ export default function ChatPage() {
           isChat={isChat}
           onSuggestionClick={sendMessage}
           onCitationClick={handleCitationClick}
+          isEasterEgg={isEasterEgg}
+          onEasterEggChange={setIsEasterEgg}
         />
       </ChatContainer>
 
@@ -235,12 +243,14 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* 输入框组件 */}
-      <ChatInput
-        onSubmit={sendMessage}
-        onStop={handleStop}
-        isLoading={isLoading}
-      />
+      {/* 输入框组件 (彩蛋模式下隐藏) */}
+      {!isEasterEgg && (
+        <ChatInput
+          onSubmit={sendMessage}
+          onStop={handleStop}
+          isLoading={isLoading}
+        />
+      )}
 
       {/* 移动端：溯源弹窗（底部 Sheet）*/}
       <MobileSourceSheet
