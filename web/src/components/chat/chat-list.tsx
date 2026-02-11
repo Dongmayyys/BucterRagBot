@@ -197,8 +197,8 @@ export function ChatList({
         // 累加点击计数
         clickCountRef.current += 1;
 
-        // 提前预加载怪兽图片（在接近触发彩蛋时）
-        if (clickCountRef.current === 3) {
+        // 首次点击即预加载怪兽图片
+        if (clickCountRef.current === 1) {
             new Image().src = '/monster.png';
             new Image().src = '/monster-open.png';
         }

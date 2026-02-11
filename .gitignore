@@ -42,3 +42,10 @@ coverage/
 tmp/
 data/
 snapshots/
+
+# 设计资源（原始文件存放在云盘）
+web/assets/raw/
+*.psd
+*.sketch
+*.ai
+!web/assets/README.md
