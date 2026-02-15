@@ -1,13 +1,14 @@
 'use client';
 
-import { useLayoutEffect, useRef, useMemo, useState, useEffect, useCallback } from 'react';
+import { useLayoutEffect, useRef, useMemo } from 'react';
 import { ArrowDown } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChatMessage, Citation, SuggestionCard, DEFAULT_SUGGESTIONS, EASTER_EGG_SUGGESTIONS, NIGHT_OWL_SUGGESTIONS } from '@/lib/types';
 import { MessageBubble } from './message-bubble';
 import { ProcessingPhase } from './processing-steps';
 import { useScrollToBottom } from '@/hooks/use-scroll-to-bottom';
-import { useTypewriterWithTransition, getTimeOfDay, getGreeting, getSubtitle, TimeOfDay } from '@/hooks/use-typewriter';
+import { useTypewriterWithTransition, getTimeOfDay } from '@/hooks/use-typewriter';
+import { useEasterEgg } from '@/hooks/use-easter-egg';
 
 /**
  * 消息列表容器
@@ -50,133 +51,52 @@ export function ChatList({
     const [containerRef, endRef, isAtBottom, scrollToBottom, hasUnread, markUnread] = useScrollToBottom<HTMLDivElement>(isLoading);
 
     // 💡 事件驱动
-    // - isLoading: false → true（用户发送消息）：滚到底部
-    // - isLoading: true → false（回复完毕）：标记未读
     const prevLoadingRef = useRef(isLoading);
     useLayoutEffect(() => {
         if (!prevLoadingRef.current && isLoading) {
-            // 用户发送消息，滚到底部
             scrollToBottom();
         }
         if (prevLoadingRef.current && !isLoading) {
-            // streaming 结束，标记未读
             markUnread();
         }
         prevLoadingRef.current = isLoading;
     }, [isLoading, markUnread, scrollToBottom]);
 
-    // 获取问候语（仅在组件挂载时计算一次）
+    // 获取时间段
     const timeOfDay = useMemo(() => getTimeOfDay(), []);
-    const greeting = useMemo(() => getGreeting(timeOfDay), [timeOfDay]);
-    const subtitle = useMemo(() => getSubtitle(timeOfDay), [timeOfDay]);
 
-    // 彩蛋欢迎语
-    const easterEggGreeting = 'Welcome to BUCT';
-    const easterEggSubtitle = 'You found a hidden easter egg!';
+    // 打字机效果
+    const { displayText, isTyping, isDeleting, transitionTo } = useTypewriterWithTransition(
+        useMemo(() => {
+            const greetings = {
+                morning: '早上好，巴克特',
+                afternoon: '下午好，巴克特',
+                evening: '晚上好，巴克特',
+                night: 'Night Owl Mode',
+            };
+            return greetings[timeOfDay];
+        }, [timeOfDay]),
+        80
+    );
 
-    // 打字机效果（支持切换）
-    const { displayText, isTyping, isDeleting, transitionTo } = useTypewriterWithTransition(greeting, 80);
-
-    // 彩蛋状态（混合状态：优先使用 prop，否则使用 local state）
-    const [localIsEasterEgg, setLocalIsEasterEgg] = useState(false);
-    const isEasterEgg = propIsEasterEgg ?? localIsEasterEgg;
-    const setIsEasterEgg = useCallback((val: boolean) => {
-        setLocalIsEasterEgg(val);
-        onEasterEggChange?.(val);
-    }, [onEasterEggChange]);
-
-    const [isMouthOpen, setIsMouthOpen] = useState(false); // 怪兽张嘴状态
-    const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
-    const emojiButtonRef = useRef<HTMLButtonElement>(null);
-    const monsterRef = useRef<HTMLImageElement>(null); // 怪兽图片 ref
-    const isMonsterAnimating = useRef(false); // 怪兽动画防抖
-    const lastClickTimeRef = useRef<number>(0);
-    const clickCountRef = useRef(0); // 点击计数
-
-    // 时间段 Emoji 映射
-    const timeEmoji = useMemo(() => {
-        const emojiMap: Record<TimeOfDay, string> = {
-            morning: '☀️',
-            afternoon: '☕',
-            evening: '🌙',
-            night: '🦉',
-        };
-        return emojiMap[timeOfDay];
-    }, [timeOfDay]);
-
-    // 当前显示的 Emoji（彩蛋模式不显示）
-    const currentEmoji = isEasterEgg ? '' : timeEmoji;
-
-    // 点击动效配置（使用 Web Animations API）
-    const getClickAnimation = useCallback((emoji: string): KeyframeAnimationOptions & { keyframes: Keyframe[] } => {
-        const animations: Record<string, { keyframes: Keyframe[]; options: KeyframeAnimationOptions }> = {
-            '☀️': {  // 太阳：旋转 + 放大
-                keyframes: [
-                    { transform: 'scale(1) rotate(0deg)' },
-                    { transform: 'scale(1.3) rotate(180deg)' },
-                    { transform: 'scale(1) rotate(360deg)' },
-                ],
-                options: { duration: 600, easing: 'ease-out' },
-            },
-            '☕': {  // 咖啡：上下晃动
-                keyframes: [
-                    { transform: 'translateY(0) rotate(0deg)' },
-                    { transform: 'translateY(-4px) rotate(-10deg)' },
-                    { transform: 'translateY(-4px) rotate(10deg)' },
-                    { transform: 'translateY(0) rotate(0deg)' },
-                ],
-                options: { duration: 500, easing: 'ease-in-out' },
-            },
-            '🌙': {  // 月亮：左右摇摆
-                keyframes: [
-                    { transform: 'rotate(0deg)' },
-                    { transform: 'rotate(-15deg)' },
-                    { transform: 'rotate(15deg)' },
-                    { transform: 'rotate(0deg)' },
-                ],
-                options: { duration: 500, easing: 'ease-in-out' },
-            },
-            '🦉': {  // 猫头鹰：左右看
-                keyframes: [
-                    { transform: 'scaleX(1)' },
-                    { transform: 'scaleX(-1)' },
-                    { transform: 'scaleX(1)' },
-                ],
-                options: { duration: 400, easing: 'ease-in-out' },
-            },
-            '❤️': {  // 爱心：心跳
-                keyframes: [
-                    { transform: 'scale(1)' },
-                    { transform: 'scale(1.2)' },
-                    { transform: 'scale(1)' },
-                    { transform: 'scale(1.2)' },
-                    { transform: 'scale(1)' },
-                ],
-                options: { duration: 600, easing: 'ease-in-out' },
-            },
-            '❓': {  // 问号：心跳
-                keyframes: [
-                    { transform: 'scale(1)' },
-                    { transform: 'scale(1.2)' },
-                    { transform: 'scale(1)' },
-                    { transform: 'scale(1.2)' },
-                    { transform: 'scale(1)' },
-                ],
-                options: { duration: 600, easing: 'ease-in-out' },
-            },
-        };
-        const defaultAnim = {  // 空闲：轻微抖动
-            keyframes: [
-                { transform: 'rotate(0deg)' },
-                { transform: 'rotate(-5deg)' },
-                { transform: 'rotate(5deg)' },
-                { transform: 'rotate(0deg)' },
-            ],
-            options: { duration: 500, easing: 'ease-in-out' },
-        };
-        const anim = animations[emoji] || defaultAnim;
-        return { keyframes: anim.keyframes, ...anim.options };
-    }, []);
+    // 🎉 彩蛋 Hook
+    const {
+        isEasterEgg,
+        isMouthOpen,
+        currentEmoji,
+        subtitle,
+        easterEggSubtitle,
+        easterEggGreeting,
+        emojiButtonRef,
+        monsterRef,
+        handleEmojiClick,
+        handleMonsterClick,
+    } = useEasterEgg({
+        timeOfDay,
+        isEasterEgg: propIsEasterEgg,
+        onEasterEggChange,
+        onTrigger: () => transitionTo(easterEggGreeting),
+    });
 
     // 当前显示的建议气泡（彩蛋 > 夜猫子 > 默认）
     const currentSuggestions = useMemo(() => {
@@ -185,63 +105,7 @@ export function ChatList({
         return DEFAULT_SUGGESTIONS;
     }, [isEasterEgg, timeOfDay]);
 
-    // 点击 Emoji 处理
-    const handleEmojiClick = useCallback(() => {
-        // 播放点击动效（使用 Web Animations API）
-        if (emojiButtonRef.current) {
-            const { keyframes, ...options } = getClickAnimation(currentEmoji);
-            emojiButtonRef.current.animate(keyframes, options);
-            lastClickTimeRef.current = Date.now();  // 记录点击时间
-        }
-
-        // 累加点击计数
-        clickCountRef.current += 1;
-
-        // 首次点击即预加载怪兽图片
-        if (clickCountRef.current === 1) {
-            new Image().src = '/monster.png';
-            new Image().src = '/monster-open.png';
-        }
-
-        // 检测彩蛋（5次触发）
-        if (clickCountRef.current >= 5 && !isEasterEgg) {
-            setIsEasterEgg(true);
-            transitionTo(easterEggGreeting);
-            clickCountRef.current = 0; // 重置
-        }
-    }, [getClickAnimation, currentEmoji, isEasterEgg, transitionTo, easterEggGreeting, setIsEasterEgg]);
-
-    // 空闲动效配置
-    const idleAnimation = useMemo(() => ({
-        keyframes: [
-            { transform: 'rotate(0deg)' },
-            { transform: 'rotate(-5deg)' },
-            { transform: 'rotate(5deg)' },
-            { transform: 'rotate(0deg)' },
-        ],
-        options: { duration: 500, easing: 'ease-in-out' } as KeyframeAnimationOptions,
-    }), []);
-
-    // 空闲时自动播放动效
-    useEffect(() => {
-        if (isTyping || isDeleting) return;  // 打字过程中不播放
-
-        const playIdleAnim = () => {
-            // 点击后 1 秒内跳过空闲动效，避免冲突
-            if (Date.now() - lastClickTimeRef.current < 1000) return;
-
-            if (emojiButtonRef.current) {
-                emojiButtonRef.current.animate(idleAnimation.keyframes, idleAnimation.options);
-            }
-        };
-
-        // 每 5 秒播放一次
-        idleTimerRef.current = setInterval(playIdleAnim, 5000);
-
-        return () => {
-            if (idleTimerRef.current) clearInterval(idleTimerRef.current);
-        };
-    }, [isTyping, isDeleting, idleAnimation]);
+    // 空状态：展示欢迎语和建议卡片
     if (messages.length === 0 && !isLoading) {
         return (
             <div className="flex-1 flex flex-col items-center justify-start pt-10 sm:pt-[15vh] px-4 overflow-y-auto custom-scrollbar relative isolation-isolate">
@@ -281,21 +145,14 @@ export function ChatList({
                     </p>
                 </div>
 
-                {/* 🔧 调试区域 - 所有时间段预览 + 动效测试 */}
+                {/* 🔧 调试区域 */}
                 {process.env.NODE_ENV === 'development' && DEBUG_UI && (
                     <div className="w-full max-w-lg mb-8 p-4 border border-dashed border-muted-foreground/30 rounded-lg">
                         <p className="text-xs text-muted-foreground mb-3 text-center">🔧 调试预览 - 生产环境自动移除</p>
-                        <div className="space-y-3">
-                            <div className="text-2xl font-bold flex items-center gap-2 justify-center">
-                                <span className="bg-gradient-to-r from-orange-500 to-amber-500 bg-clip-text text-transparent">早上好，巴克特</span>
-                                <button className="emoji-click-sun hover:scale-110 transition-transform" title="点击测试动效">☀️</button>
-                            </div>
-                            {/* ... 其他调试项保持不变 ... */}
-                        </div>
                     </div>
                 )}
 
-                {/* 内容区域 - 固定高度避免切换时抖动 */}
+                {/* 内容区域 */}
                 <div className={`w-full flex items-center justify-center relative z-10 `}>
                     {/* 彩蛋模式：显示怪兽 */}
                     {isEasterEgg ? (
@@ -306,26 +163,7 @@ export function ChatList({
                                 src={isMouthOpen ? "/monster-open.png" : "/monster.png"}
                                 alt="Bucter Monster"
                                 className="w-56 h-56 sm:w-64 sm:h-64 object-contain cursor-pointer drop-shadow-2xl hover:-translate-y-2 hover:scale-105 transition-all duration-500 ease-in-out"
-                                onClick={() => {
-                                    if (isMonsterAnimating.current) return;
-                                    if (monsterRef.current) {
-                                        isMonsterAnimating.current = true;
-                                        monsterRef.current.animate(
-                                            [
-                                                { transform: 'scale(1)', offset: 0 },
-                                                { transform: 'scale(1.2)', offset: 0.3 },
-                                                { transform: 'scale(1.2)', offset: 0.7 },
-                                                { transform: 'scale(1)', offset: 1 },
-                                            ],
-                                            { duration: 600, easing: 'ease-in-out' }
-                                        );
-                                        setTimeout(() => setIsMouthOpen(true), 180);
-                                        setTimeout(() => {
-                                            setIsMouthOpen(false);
-                                            isMonsterAnimating.current = false;
-                                        }, 600);
-                                    }
-                                }}
+                                onClick={handleMonsterClick}
                             />
                             <button
                                 className="mt-8 text-lg font-semibold text-primary/80 hover:text-primary underline decoration-dashed decoration-2 decoration-primary/30 underline-offset-8 transition-colors cursor-pointer "
@@ -371,22 +209,21 @@ export function ChatList({
                     );
                 })}
 
-                {/* 加载中：骨架屏 */}
+                {/* 加载中骨架屏 */}
                 {isLoading && messages[messages.length - 1]?.role === 'user' && (
                     <LoadingSkeleton />
                 )}
             </div>
 
-            {/* 新消息浮动按钮 - 生成中或有未读消息时显示 */}
-            {(isLoading || hasUnread) && !isAtBottom && (
-                <div className="sticky bottom-4 w-full flex justify-center pointer-events-none">
+            {/* 新消息提示 */}
+            {hasUnread && !isAtBottom && (
+                <div className="sticky bottom-4 flex justify-center">
                     <button
                         onClick={scrollToBottom}
-                        className="flex items-center gap-2 px-4 py-2 rounded-full
-                                   bg-primary text-primary-foreground shadow-lg
-                                   hover:bg-primary/90 transition-all
-                                   animate-bounce pointer-events-auto"
-                        aria-label="滚动到底部"
+                        className="flex items-center gap-2 px-4 py-2 rounded-full 
+                         bg-primary text-primary-foreground shadow-lg
+                         hover:bg-primary/90 transition-all
+                         animate-in slide-in-from-bottom-4"
                     >
                         <ArrowDown className="w-4 h-4" />
                         <span className="text-sm font-medium">新消息</span>
