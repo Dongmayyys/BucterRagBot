@@ -8,7 +8,7 @@ import { MessageBubble } from './message-bubble';
 import { ProcessingPhase } from './processing-steps';
 import { useScrollToBottom } from '@/hooks/use-scroll-to-bottom';
 import { useTypewriterWithTransition, getTimeOfDay } from '@/hooks/use-typewriter';
-import { useEasterEgg } from '@/hooks/use-easter-egg';
+import { useEasterEgg, EASTER_EGG_GREETING } from '@/hooks/use-easter-egg';
 
 /**
  * 消息列表容器
@@ -86,7 +86,6 @@ export function ChatList({
         currentEmoji,
         subtitle,
         easterEggSubtitle,
-        easterEggGreeting,
         emojiButtonRef,
         monsterRef,
         handleEmojiClick,
@@ -95,7 +94,7 @@ export function ChatList({
         timeOfDay,
         isEasterEgg: propIsEasterEgg,
         onEasterEggChange,
-        onTrigger: () => transitionTo(easterEggGreeting),
+        onTrigger: () => transitionTo(EASTER_EGG_GREETING),
     });
 
     // 当前显示的建议气泡（彩蛋 > 夜猫子 > 默认）
@@ -215,15 +214,15 @@ export function ChatList({
                 )}
             </div>
 
-            {/* 新消息提示 */}
-            {hasUnread && !isAtBottom && (
-                <div className="sticky bottom-4 flex justify-center">
+            {/* 新消息浮动按钮 - 生成中或有未读消息时显示 */}
+            {(isLoading || hasUnread) && !isAtBottom && (
+                <div className="sticky bottom-4 w-full flex justify-center pointer-events-none">
                     <button
                         onClick={scrollToBottom}
                         className="flex items-center gap-2 px-4 py-2 rounded-full 
                          bg-primary text-primary-foreground shadow-lg
                          hover:bg-primary/90 transition-all
-                         animate-in slide-in-from-bottom-4"
+                         animate-bounce pointer-events-auto"
                     >
                         <ArrowDown className="w-4 h-4" />
                         <span className="text-sm font-medium">新消息</span>
