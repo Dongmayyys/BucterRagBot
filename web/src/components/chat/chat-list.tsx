@@ -7,7 +7,7 @@ import { ChatMessage, Citation, SuggestionCard, DEFAULT_SUGGESTIONS, EASTER_EGG_
 import { MessageBubble } from './message-bubble';
 import { ProcessingPhase } from './processing-steps';
 import { useScrollToBottom } from '@/hooks/use-scroll-to-bottom';
-import { useTypewriterWithTransition, getTimeOfDay } from '@/hooks/use-typewriter';
+import { useTypewriterWithTransition, getTimeOfDay, getGreeting } from '@/hooks/use-typewriter';
 import { useEasterEgg, EASTER_EGG_GREETING } from '@/hooks/use-easter-egg';
 
 /**
@@ -66,18 +66,8 @@ export function ChatList({
     const timeOfDay = useMemo(() => getTimeOfDay(), []);
 
     // 打字机效果
-    const { displayText, isTyping, isDeleting, transitionTo } = useTypewriterWithTransition(
-        useMemo(() => {
-            const greetings = {
-                morning: '早上好，巴克特',
-                afternoon: '下午好，巴克特',
-                evening: '晚上好，巴克特',
-                night: 'Night Owl Mode',
-            };
-            return greetings[timeOfDay];
-        }, [timeOfDay]),
-        80
-    );
+    const greeting = useMemo(() => getGreeting(timeOfDay), [timeOfDay]);
+    const { displayText, isTyping, isDeleting, transitionTo } = useTypewriterWithTransition(greeting, 80);
 
     // 🎉 彩蛋 Hook
     const {
@@ -223,6 +213,7 @@ export function ChatList({
                          bg-primary text-primary-foreground shadow-lg
                          hover:bg-primary/90 transition-all
                          animate-bounce pointer-events-auto"
+                        aria-label="滚动到底部"
                     >
                         <ArrowDown className="w-4 h-4" />
                         <span className="text-sm font-medium">新消息</span>
