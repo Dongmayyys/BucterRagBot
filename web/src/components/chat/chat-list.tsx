@@ -8,7 +8,7 @@ import { MessageBubble } from './message-bubble';
 import { ProcessingPhase } from './processing-steps';
 import { useScrollToBottom } from '@/hooks/use-scroll-to-bottom';
 import { useTypewriterWithTransition, getTimeOfDay, getGreeting } from '@/hooks/use-typewriter';
-import { useEasterEgg, EASTER_EGG_GREETING } from '@/hooks/use-easter-egg';
+import { useEasterEgg, EASTER_EGG_GREETING, MONSTER_IMAGE, MONSTER_OPEN_IMAGE } from '@/hooks/use-easter-egg';
 
 /**
  * 消息列表容器
@@ -149,7 +149,7 @@ export function ChatList({
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
                                 ref={monsterRef}
-                                src={isMouthOpen ? "/monster-open.png" : "/monster.png"}
+                                src={isMouthOpen ? MONSTER_OPEN_IMAGE : MONSTER_IMAGE}
                                 alt="Bucter Monster"
                                 className="w-56 h-56 sm:w-64 sm:h-64 object-contain cursor-pointer drop-shadow-2xl hover:-translate-y-2 hover:scale-105 transition-all duration-500 ease-in-out"
                                 onClick={handleMonsterClick}

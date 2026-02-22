@@ -72,6 +72,10 @@ const DEFAULT_ANIMATION: AnimationConfig = {
 export const EASTER_EGG_GREETING = 'Welcome to BUCT';
 export const EASTER_EGG_SUBTITLE = 'You found a hidden easter egg!';
 
+// 怪兽图片路径
+export const MONSTER_IMAGE = '/monster.webp';
+export const MONSTER_OPEN_IMAGE = '/monster-open.webp';
+
 // 时间段 Emoji 映射
 const TIME_EMOJI_MAP: Record<TimeOfDay, string> = {
     morning: '☀️',
@@ -162,8 +166,8 @@ export function useEasterEgg({
 
         // 首次点击即预加载怪兽图片
         if (clickCountRef.current === 1) {
-            new Image().src = '/monster.png';
-            new Image().src = '/monster-open.png';
+            new Image().src = MONSTER_IMAGE;
+            new Image().src = MONSTER_OPEN_IMAGE;
         }
 
         // 检测彩蛋（5次触发）
