@@ -122,11 +122,7 @@
 
   html,
   body {
-    @apply bg-background text-foreground;
-    /* 固定页面避免滚动条 */
-    height: 100%;
-    overflow: hidden;
-    /* margin: 50px; */
+    @apply bg-background text-foreground h-full overflow-hidden overscroll-none;
   }
 }
 
@@ -178,4 +174,18 @@
 .custom-scrollbar {
   scrollbar-width: thin;
   scrollbar-color: rgba(128, 128, 128, 0.3) transparent;
+}
+
+/* 移动端（小于 sm 断点）隐藏滚动条 - 防止虚拟键盘弹出时的布局抖动 */
+@media (max-width: 639px) {
+  .custom-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .custom-scrollbar {
+    scrollbar-width: none;
+    /* Firefox */
+    -ms-overflow-style: none;
+    /* IE/Edge */
+  }
 }

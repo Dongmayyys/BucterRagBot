@@ -97,7 +97,7 @@ export function ChatList({
     // 空状态：展示欢迎语和建议卡片
     if (messages.length === 0 && !isLoading) {
         return (
-            <div className="flex-1 flex flex-col items-center justify-start pt-10 sm:pt-[15vh] px-4 overflow-y-auto custom-scrollbar relative isolation-isolate">
+            <div className="flex-1 flex flex-col items-center pt-10 sm:pt-[15vh] px-4 overflow-y-auto custom-scrollbar relative isolation-isolate">
                 {/* 背景装饰 - 极简流体光效 */}
                 <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none select-none">
                     <div className="absolute top-[20%] left-[15%] w-160 h-160 bg-primary/1 rounded-full blur-[150px] animate-pulse mix-blend-multiply dark:mix-blend-normal" style={{ animationDuration: '8s' }} />
@@ -105,8 +105,8 @@ export function ChatList({
                 </div>
 
                 {/* 欢迎标题 */}
-                <div className="text-center mb-12 sm:mb-16 relative z-10 max-w-2xl mx-auto">
-                    <div className="mb-6 inline-flex items-center justify-center">
+                <div className="text-center mb-4 sm:mb-16 relative z-10 max-w-2xl mx-auto shrink-0">
+                    <div className="mb-4 inline-flex items-center justify-center">
                         <div className="relative">
                             <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-foreground flex items-center justify-center gap-3 min-h-12 sm:min-h-16">
                                 <span className={isEasterEgg ? "bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent animate-pulse" : ""}>
@@ -142,10 +142,10 @@ export function ChatList({
                 )}
 
                 {/* 内容区域 */}
-                <div className={`w-full flex items-center justify-center relative z-10 `}>
+                <div className="flex-1 w-full flex items-center justify-center relative z-10">
                     {/* 彩蛋模式：显示怪兽 */}
                     {isEasterEgg ? (
-                        <div className="flex flex-col items-center animate-in fade-in zoom-in duration-500">
+                        <div className="flex flex-col items-center animate-in fade-in zoom-in duration-500 -mt-16">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
                                 ref={monsterRef}
@@ -169,6 +169,7 @@ export function ChatList({
                                     key={idx}
                                     suggestion={suggestion}
                                     onClick={() => onSuggestionClick?.(suggestion.query)}
+                                    className={idx === 3 ? 'hidden sm:flex' : ''}
                                 />
                             ))}
                         </div>
@@ -230,18 +231,20 @@ export function ChatList({
 function SuggestionButton({
     suggestion,
     onClick,
+    className = '',
 }: {
     suggestion: SuggestionCard;
     onClick: () => void;
+    className?: string;
 }) {
     return (
         <button
             onClick={onClick}
-            className="flex items-center gap-4 p-4 rounded-2xl
+            className={`flex items-center gap-4 p-4 rounded-2xl
                  border border-border/40 bg-background/50 backdrop-blur-sm
                  hover:bg-muted/50 hover:border-primary/20 hover:shadow-sm hover:-translate-y-0.5
                  transition-all duration-300 text-left
-                 group w-full"
+                 group w-full ${className}`}
         >
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-muted/50 group-hover:bg-primary/10 group-hover:scale-110 transition-all duration-300">
                 <span className="text-xl group-hover:rotate-12 transition-transform duration-300">{suggestion.emoji}</span>

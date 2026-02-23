@@ -9,6 +9,7 @@ import { ChatList } from '@/components/chat/chat-list';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatMessage, Citation } from '@/lib/types';
 import { ProcessingPhase } from '@/components/chat/processing-steps';
+import { useViewportHeight } from '@/hooks/use-viewport-height';
 
 /**
  * 主页面 - 聊天界面
@@ -36,6 +37,9 @@ export default function ChatPage() {
 
   // 彩蛋状态（控制输入框显隐）
   const [isEasterEgg, setIsEasterEgg] = useState(false);
+
+  // 动态视口高度（解决移动端 vh 不准确问题）
+  useViewportHeight();
 
   // 用于终止请求的 AbortController
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -210,7 +214,10 @@ export default function ChatPage() {
   }, []);
 
   return (
-    <div className="flex flex-col h-screen bg-background">
+    <div
+      className="flex flex-col bg-background"
+      style={{ height: 'calc(var(--vh, 1vh) * 100)' }}
+    >
       {/* 顶部标题栏 */}
       <ChatHeader
         onNewChat={handleClear}
