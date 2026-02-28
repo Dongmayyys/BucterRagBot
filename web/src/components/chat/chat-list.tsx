@@ -1,6 +1,6 @@
 'use client';
 
-import { useLayoutEffect, useRef, useMemo } from 'react';
+import { useLayoutEffect, useRef, useMemo, useEffect } from 'react';
 import { ArrowDown } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChatMessage, Citation, SuggestionCard, DEFAULT_SUGGESTIONS, EASTER_EGG_SUGGESTIONS, NIGHT_OWL_SUGGESTIONS } from '@/lib/types';
@@ -86,6 +86,13 @@ export function ChatList({
         onEasterEggChange,
         onTrigger: () => transitionTo(EASTER_EGG_GREETING),
     });
+
+    // 退出彩蛋时恢复正常欢迎语
+    useEffect(() => {
+        if (!isEasterEgg) {
+            transitionTo(greeting);
+        }
+    }, [isEasterEgg, greeting, transitionTo]);
 
     // 当前显示的建议气泡（彩蛋 > 夜猫子 > 默认）
     const currentSuggestions = useMemo(() => {
