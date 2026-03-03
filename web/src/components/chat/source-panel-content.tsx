@@ -1,11 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Citation } from '@/lib/types';
 import { getSnapshotUrl } from '@/lib/utils';
+
+/**
+ * 预加载图片（隐形加载，不显示）
+ */
+function preloadImage(url: string) {
+    const img = new Image();
+    img.src = url;
+}
 
 /**
  * 溯源面板内容 - 图片预览版
@@ -14,6 +22,23 @@ export function SourcePanelContent({ citation, onClose }: { citation: Citation |
     const [currentPage, setCurrentPage] = useState<number>(citation?.page || 1);
     const [isImageLoading, setIsImageLoading] = useState(true);
     const [showLargeImage, setShowLargeImage] = useState(false);
+
+    const totalPages = citation?.totalPages || 65;
+    const documentId = citation?.documentId || citation?.fileName?.replace('.pdf', '') || '';
+
+    // 预加载左右相邻页面
+    useEffect(() => {
+        if (!citation || citation.customImageUrl) return; // 自定义图片不预加载
+
+        // 预加载前一页
+        if (currentPage > 1) {
+            preloadImage(getSnapshotUrl(documentId, currentPage - 1));
+        }
+        // 预加载后一页
+        if (currentPage < totalPages) {
+            preloadImage(getSnapshotUrl(documentId, currentPage + 1));
+        }
+    }, [currentPage, documentId, totalPages, citation]);
 
 
 
@@ -27,9 +52,6 @@ export function SourcePanelContent({ citation, onClose }: { citation: Citation |
             </div>
         );
     }
-
-    const totalPages = citation.totalPages || 65;
-    const documentId = citation.documentId || citation.fileName?.replace('.pdf', '') || '';
 
     // 优先使用自定义图片，降级到 PDF 快照
     const imageUrl = citation.customImageUrl || getSnapshotUrl(documentId, currentPage);
