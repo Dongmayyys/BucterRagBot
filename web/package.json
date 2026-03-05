@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "share": "ngrok http 3000 --domain=unpreviewed-blotty-damon.ngrok-free.dev"
   },
   "dependencies": {
     "@ai-sdk/openai": "^2.0.88",

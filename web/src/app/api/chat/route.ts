@@ -23,13 +23,14 @@ const siliconflow = createOpenAI({
 
 // 模型配置
 const LLM_MODEL = process.env.LLM_MODEL || 'Qwen/Qwen3-8B';
+const INTENT_MODEL = process.env.INTENT_MODEL || LLM_MODEL; // 意图识别模型，可用更快的小模型
 const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || 'BAAI/bge-m3';
 const RERANK_MODEL = process.env.RERANK_MODEL || 'BAAI/bge-reranker-v2-m3';
 
 // RAG 参数
-const SEARCH_MATCH_COUNT = parseInt(process.env.SEARCH_MATCH_COUNT || '20');
+const SEARCH_MATCH_COUNT = parseInt(process.env.SEARCH_MATCH_COUNT || '50');
 const RERANK_TOP_N = parseInt(process.env.RERANK_TOP_N || '6');
-const RERANK_THRESHOLD = parseFloat(process.env.RERANK_THRESHOLD || '0.15');
+const RERANK_THRESHOLD = parseFloat(process.env.RERANK_THRESHOLD || '0.2');
 
 // LLM 参数
 const LLM_TIMEOUT_MS = parseInt(process.env.LLM_TIMEOUT_MS || '20000');
@@ -414,7 +415,7 @@ ${historyText}
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                model: LLM_MODEL,
+                model: INTENT_MODEL,
                 messages: [{ role: 'user', content: classifyPrompt }],
                 max_tokens: 200,
                 temperature: 0,
