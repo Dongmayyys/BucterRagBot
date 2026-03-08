@@ -9,6 +9,7 @@ import { ChatList } from '@/components/chat/chat-list';
 import { ChatInput } from '@/components/chat/chat-input';
 import { ChatMessage, Citation } from '@/lib/types';
 import { ProcessingPhase } from '@/components/chat/processing-steps';
+import { useVisualViewport } from '@/hooks/use-visual-viewport';
 
 /**
  * 主页面 - 聊天界面
@@ -36,6 +37,9 @@ export default function ChatPage() {
 
   // 彩蛋状态（控制输入框显隐）
   const [isEasterEgg, setIsEasterEgg] = useState(false);
+
+  // 可视视口高度（解决键盘覆盖问题）
+  useVisualViewport();
 
   // 用于终止请求的 AbortController
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -210,7 +214,10 @@ export default function ChatPage() {
   }, []);
 
   return (
-    <div className="flex flex-col h-dvh bg-background">
+    <div
+      className="flex flex-col bg-background"
+      style={{ height: 'var(--visual-viewport-height, 100vh)' }}
+    >
       {/* 顶部标题栏 */}
       <ChatHeader
         onNewChat={handleClear}
