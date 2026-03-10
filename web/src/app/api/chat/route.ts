@@ -33,7 +33,8 @@ const RERANK_TOP_N = parseInt(process.env.RERANK_TOP_N || '6');
 const RERANK_THRESHOLD = parseFloat(process.env.RERANK_THRESHOLD || '0.2');
 
 // LLM 参数
-const LLM_TIMEOUT_MS = parseInt(process.env.LLM_TIMEOUT_MS || '20000');
+const LLM_TIMEOUT_MS = parseInt(process.env.LLM_TIMEOUT_MS || '15000');
+const INTENT_TIMEOUT_MS = parseInt(process.env.INTENT_TIMEOUT_MS || '8000');
 const TEMPERATURE_QUERY = parseFloat(process.env.TEMPERATURE_QUERY || '0.3');
 const TEMPERATURE_CHAT = parseFloat(process.env.TEMPERATURE_CHAT || '0.7');
 
@@ -408,6 +409,10 @@ ${historyText}
 用户最新输入：${query}`;
 
     try {
+        // 意图分类超时控制
+        const intentController = new AbortController();
+        const intentTimeoutId = setTimeout(() => intentController.abort(), INTENT_TIMEOUT_MS);
+
         const response = await fetch('https://api.siliconflow.cn/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -420,7 +425,9 @@ ${historyText}
                 max_tokens: 200,
                 temperature: 0,
             }),
+            signal: intentController.signal,
         });
+        clearTimeout(intentTimeoutId);
 
         if (!response.ok) {
             console.error('[Intent] API failed:', await response.text());
