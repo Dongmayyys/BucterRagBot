@@ -10,7 +10,7 @@ import { useEffect } from 'react';
  * 
  * 使用方式：
  * 1. 在顶层组件调用 useVisualViewport()
- * 2. CSS 中使用 var(--visual-viewport-height, 100dvh)
+ * 2. CSS 中使用 var(--visual-viewport-height, 100vh)
  */
 export function useVisualViewport() {
     useEffect(() => {

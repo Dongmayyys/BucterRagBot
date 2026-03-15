@@ -49,3 +49,4 @@ web/assets/raw/
 *.sketch
 *.ai
 !web/assets/README.md
+.agent/
