@@ -10,6 +10,7 @@ import { ChatInput } from '@/components/chat/chat-input';
 import { ChatMessage, Citation } from '@/lib/types';
 import { ProcessingPhase } from '@/components/chat/processing-steps';
 import { useVisualViewport } from '@/hooks/use-visual-viewport';
+import { useStreamBuffer } from '@/hooks/use-stream-buffer';
 
 /**
  * 主页面 - 聊天界面
@@ -43,6 +44,9 @@ export default function ChatPage() {
 
   // 用于终止请求的 AbortController
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // 流式渲染缓冲区（rAF 节流，避免逐 chunk setState）
+  const { start: startBuffer, push: pushToBuffer, flushAll, reset: resetBuffer } = useStreamBuffer();
 
   /**
    * 核心发送逻辑
@@ -147,19 +151,28 @@ export default function ChatPage() {
 
           buffer = rest?.trim() || '';
           streamStarted = true;
+
+          // 注册缓冲区 flush 回调（此时 intent 和 citations 已确定，闭包捕获安全）
+          const msgCitations = intent === 'query' ? citations : undefined;
+          startBuffer((content) => {
+            setMessages(prev =>
+              prev.map(msg =>
+                msg.id === assistantId
+                  ? { ...msg, content, citations: msgCitations }
+                  : msg
+              )
+            );
+          });
         }
 
-        // 7. 更新 assistant 消息
+        // 7. 将内容写入缓冲区（由 rAF 节奏驱动渲染，不再逐 chunk setState）
         if (streamStarted) {
-          setMessages(prev =>
-            prev.map(msg =>
-              msg.id === assistantId
-                ? { ...msg, content: buffer, citations: intent === 'query' ? citations : undefined }
-                : msg
-            )
-          );
+          pushToBuffer(buffer);
         }
       }
+
+      // 流正常结束：立即 flush 剩余缓冲区内容，确保最后几个字符不丢
+      flushAll();
 
       // ★ 错误状态时保持 error phase，不覆盖
       if (intent !== 'error') {
@@ -168,11 +181,13 @@ export default function ChatPage() {
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
         console.log('[Frontend] Request aborted by user');
+        resetBuffer();  // 丢弃未 flush 的内容
         setPhase('done');
         return;
       }
 
       console.error('Chat error:', err);
+      resetBuffer();  // 丢弃未 flush 的内容
       setError(err instanceof Error ? err.message : 'Unknown error');
       setPhase('idle');
       setMessages(prev => prev.filter(msg => msg.id !== assistantId));
@@ -180,7 +195,7 @@ export default function ChatPage() {
       setIsLoading(false);
       abortControllerRef.current = null;
     }
-  }, [isLoading, messages]);
+  }, [isLoading, messages, startBuffer, pushToBuffer, flushAll, resetBuffer]);
 
   /**
    * 停止生成
