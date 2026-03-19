@@ -190,7 +190,10 @@ export default function ChatPage() {
       resetBuffer();  // 丢弃未 flush 的内容
       setError(err instanceof Error ? err.message : 'Unknown error');
       setPhase('idle');
-      setMessages(prev => prev.filter(msg => msg.id !== assistantId));
+      // 保留已有内容的消息（部分成功），只删空消息避免空气泡
+      setMessages(prev => prev.filter(msg =>
+        msg.id !== assistantId || msg.content.length > 0
+      ));
     } finally {
       setIsLoading(false);
       abortControllerRef.current = null;
