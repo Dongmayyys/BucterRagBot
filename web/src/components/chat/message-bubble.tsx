@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { User, Bot, BotOff } from 'lucide-react';
@@ -25,7 +26,36 @@ interface MessageBubbleProps {
     onCitationClick?: (citation: Citation) => void;
 }
 
-export function MessageBubble({ message, isStreaming, phase = 'idle', hasResults = true, isChat = false, onCitationClick }: MessageBubbleProps) {
+// Markdown 渲染组件配置（模块级常量，避免每次渲染创建新对象）
+const markdownComponents = {
+    table: ({ children }: { children?: React.ReactNode }) => (
+        <div className="overflow-x-auto my-2">
+            <table className="min-w-full text-xs">{children}</table>
+        </div>
+    ),
+    code: ({ children, className }: { children?: React.ReactNode; className?: string }) => {
+        const isInline = !className;
+        return isInline ? (
+            <code className="bg-muted px-1.5 py-0.5 rounded text-xs">
+                {children}
+            </code>
+        ) : (
+            <code className={className}>{children}</code>
+        );
+    },
+    a: ({ children, href }: { children?: React.ReactNode; href?: string }) => (
+        <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary underline underline-offset-2 hover:text-primary/80"
+        >
+            {children}
+        </a>
+    ),
+};
+
+export const MessageBubble = memo(function MessageBubble({ message, isStreaming, phase = 'idle', hasResults = true, isChat = false, onCitationClick }: MessageBubbleProps) {
     const isUser = message.role === 'user';
 
     return (
@@ -75,36 +105,7 @@ export function MessageBubble({ message, isStreaming, phase = 'idle', hasResults
                         <div className="prose prose-sm dark:prose-invert max-w-none">
                             <ReactMarkdown
                                 remarkPlugins={[remarkGfm]}
-                                components={{
-                                    // 自定义表格样式
-                                    table: ({ children }) => (
-                                        <div className="overflow-x-auto my-2">
-                                            <table className="min-w-full text-xs">{children}</table>
-                                        </div>
-                                    ),
-                                    // 自定义代码块样式
-                                    code: ({ children, className }) => {
-                                        const isInline = !className;
-                                        return isInline ? (
-                                            <code className="bg-muted px-1.5 py-0.5 rounded text-xs">
-                                                {children}
-                                            </code>
-                                        ) : (
-                                            <code className={className}>{children}</code>
-                                        );
-                                    },
-                                    // 自定义链接样式
-                                    a: ({ children, href }) => (
-                                        <a
-                                            href={href}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-primary underline underline-offset-2 hover:text-primary/80"
-                                        >
-                                            {children}
-                                        </a>
-                                    ),
-                                }}
+                                components={markdownComponents}
                             >
                                 {message.content}
                             </ReactMarkdown>
@@ -131,4 +132,4 @@ export function MessageBubble({ message, isStreaming, phase = 'idle', hasResults
             )}
         </div>
     );
-}
+});
