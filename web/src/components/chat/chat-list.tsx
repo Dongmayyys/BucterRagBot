@@ -199,8 +199,8 @@ export function ChatList({
                             message={message}
                             isStreaming={isLoading && isLastAssistant}
                             phase={isLastAssistant ? phase : 'idle'}
-                            hasResults={hasResults}
-                            isChat={isChat}
+                            hasResults={isLastAssistant ? hasResults : true}
+                            isChat={isLastAssistant ? isChat : false}
                             onCitationClick={onCitationClick}
                         />
                     );
