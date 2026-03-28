@@ -66,6 +66,10 @@ export const MessageBubble = memo(function MessageBubble({ message, isStreaming,
                 'flex gap-3 w-full',
                 isUser ? 'justify-end' : 'justify-start'
             )}
+            style={isStreaming ? undefined : {
+                contentVisibility: 'auto',
+                containIntrinsicSize: 'auto 200px',
+            }}
         >
             {/* AI 头像 (左侧) */}
             {!isUser && (
