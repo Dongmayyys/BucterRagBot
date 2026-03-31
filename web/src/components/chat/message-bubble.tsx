@@ -56,8 +56,6 @@ const markdownComponents = {
 };
 
 export const MessageBubble = memo(function MessageBubble({ message, isStreaming, phase = 'idle', hasResults = true, isChat = false, onCitationClick }: MessageBubbleProps) {
-    // ⚠️ 临时：验证 memo 效果（只有正在输出的消息才应该打印）
-    console.log(`[MessageBubble] render: ${message.id}, streaming: ${isStreaming}`);
     const isUser = message.role === 'user';
 
     return (
@@ -66,10 +64,6 @@ export const MessageBubble = memo(function MessageBubble({ message, isStreaming,
                 'flex gap-3 w-full',
                 isUser ? 'justify-end' : 'justify-start'
             )}
-            style={isStreaming ? undefined : {
-                contentVisibility: 'auto',
-                containIntrinsicSize: 'auto 200px',
-            }}
         >
             {/* AI 头像 (左侧) */}
             {!isUser && (

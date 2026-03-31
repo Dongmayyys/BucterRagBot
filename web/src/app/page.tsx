@@ -26,7 +26,23 @@ import { useStreamBuffer } from '@/hooks/use-stream-buffer';
 const STREAM_SEPARATOR = '---STREAM_START---';
 
 export default function ChatPage() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  // ⚠️ 临时：生成 500 条假消息体验卡顿（测试完删掉）
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    const mock: ChatMessage[] = [];
+    for (let i = 0; i < 500; i++) {
+      mock.push({
+        id: `user-${i}`,
+        role: 'user',
+        content: `这是第 ${i + 1} 条用户消息，包含一些额外文字来增加 DOM 复杂度。用户可能会输入很长的问题，比如关于技术架构、性能优化、代码实现等方面的详细描述。`,
+      });
+      mock.push({
+        id: `assistant-${i}`,
+        role: 'assistant',
+        content: `## 回复 #${i + 1}\n\n这是一段较长的 AI 回复，包含多种 Markdown 元素：\n\n### 代码示例\n\n\`\`\`javascript\nfunction fibonacci(n) {\n  if (n <= 1) return n;\n  return fibonacci(n - 1) + fibonacci(n - 2);\n}\nconsole.log(fibonacci(10));\n\`\`\`\n\n### 表格\n\n| 方案 | 优点 | 缺点 |\n|------|------|------|\n| 方案 A | 简单 | 性能差 |\n| 方案 B | 高效 | 复杂 |\n| 方案 C | 均衡 | 需权衡 |\n\n### 列表\n\n- 第一点：这是一个比较长的列表项\n- 第二点：包含 \`内联代码\` 和 **加粗文本**\n- 第三点：还有 [链接](https://example.com)\n\n> 引用：性能优化需要数据驱动，不是想象驱动。`,
+      });
+    }
+    return mock;
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);  // 引用详情面板
   const [selectedCitation, setSelectedCitation] = useState<Citation | null>(null);

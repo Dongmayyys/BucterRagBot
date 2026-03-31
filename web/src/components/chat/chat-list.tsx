@@ -1,6 +1,7 @@
 'use client';
 
 import { useLayoutEffect, useRef, useMemo, useEffect } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowDown } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChatMessage, Citation, SuggestionCard, DEFAULT_SUGGESTIONS, EASTER_EGG_SUGGESTIONS, NIGHT_OWL_SUGGESTIONS } from '@/lib/types';
@@ -11,13 +12,13 @@ import { useTypewriterWithTransition, getTimeOfDay, getGreeting } from '@/hooks/
 import { useEasterEgg, EASTER_EGG_GREETING, MONSTER_IMAGE, MONSTER_OPEN_IMAGE } from '@/hooks/use-easter-egg';
 
 /**
- * 消息列表容器
+ * 消息列表容器（虚拟列表版）
  * 
- * 职责：
- * - 渲染所有消息气泡
- * - 自动滚动到底部
- * - 空状态时展示建议卡片
- * - 加载中显示骨架屏
+ * 架构：
+ * - @tanstack/react-virtual → 管虚拟化（可视区域计算 + 动态高度测量）
+ * - useScrollToBottom → 管滚动（自动滚底 + 交互防抖 + visualViewport）
+ * - containerRef 共享：两者操作同一个滚动容器
+ * - endRef 放在总高度容器上：高度变化 → ResizeObserver → maybeAutoScroll
  */
 
 interface ChatListProps {
@@ -28,12 +29,10 @@ interface ChatListProps {
     isChat?: boolean;
     onSuggestionClick?: (query: string) => void;
     onCitationClick?: (citation: Citation) => void;
-    // 彩蛋状态控制（提升到父组件以控制输入框显隐）
     isEasterEgg?: boolean;
     onEasterEggChange?: (isActive: boolean) => void;
 }
 
-// 🔧 调试开关：设为 false 关闭调试区域（生产构建自动移除）
 const DEBUG_UI = false;
 
 export function ChatList({
@@ -47,10 +46,31 @@ export function ChatList({
     isEasterEgg: propIsEasterEgg,
     onEasterEggChange
 }: ChatListProps) {
-    // 智能滚底 Hook
+    // 自定义滚底 Hook（保留精细防抖 + visualViewport 支持）
     const [containerRef, endRef, isAtBottom, scrollToBottom, hasUnread, markUnread] = useScrollToBottom<HTMLDivElement>(isLoading);
 
-    // 💡 事件驱动
+    // 骨架屏判断
+    const showSkeleton = isLoading && messages.length > 0 && messages[messages.length - 1]?.role === 'user';
+    const totalCount = messages.length + (showSkeleton ? 1 : 0);
+
+    // 虚拟化：只负责可视区域计算和动态高度测量
+    const virtualizer = useVirtualizer({
+        count: totalCount,
+        getScrollElement: () => containerRef.current,
+        estimateSize: () => 120,
+        overscan: 10,
+    });
+
+    // 首次挂载时滚到底部（virtualizer 默认从顶部开始）
+    const initialScrollDone = useRef(false);
+    useLayoutEffect(() => {
+        if (!initialScrollDone.current && messages.length > 0 && containerRef.current) {
+            containerRef.current.scrollTop = containerRef.current.scrollHeight;
+            initialScrollDone.current = true;
+        }
+    }, [messages.length, containerRef]);
+
+    // streaming 开始/结束的事件驱动
     const prevLoadingRef = useRef(isLoading);
     useLayoutEffect(() => {
         if (!prevLoadingRef.current && isLoading) {
@@ -69,7 +89,7 @@ export function ChatList({
     const greeting = useMemo(() => getGreeting(timeOfDay), [timeOfDay]);
     const { displayText, isTyping, isDeleting, transitionTo } = useTypewriterWithTransition(greeting, 80);
 
-    // 🎉 彩蛋 Hook
+    // 彩蛋 Hook
     const {
         isEasterEgg,
         isMouthOpen,
@@ -87,31 +107,27 @@ export function ChatList({
         onTrigger: () => transitionTo(EASTER_EGG_GREETING),
     });
 
-    // 退出彩蛋时恢复正常欢迎语
     useEffect(() => {
         if (!isEasterEgg) {
             transitionTo(greeting);
         }
     }, [isEasterEgg, greeting, transitionTo]);
 
-    // 当前显示的建议气泡（彩蛋 > 夜猫子 > 默认）
     const currentSuggestions = useMemo(() => {
         if (isEasterEgg) return EASTER_EGG_SUGGESTIONS;
         if (timeOfDay === 'night') return NIGHT_OWL_SUGGESTIONS;
         return DEFAULT_SUGGESTIONS;
     }, [isEasterEgg, timeOfDay]);
 
-    // 空状态：展示欢迎语和建议卡片
+    // 空状态
     if (messages.length === 0 && !isLoading) {
         return (
             <div className="flex-1 flex flex-col items-center pt-10 sm:pt-[15vh] px-4 overflow-y-auto custom-scrollbar relative isolation-isolate">
-                {/* 背景装饰 - 极简流体光效 */}
                 <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none select-none">
                     <div className="absolute top-[20%] left-[15%] w-160 h-160 bg-primary/1 rounded-full blur-[150px] animate-pulse mix-blend-multiply dark:mix-blend-normal" style={{ animationDuration: '8s' }} />
                     <div className="absolute top-[30%] right-[15%] w-140 h-140 bg-blue-500/1 rounded-full blur-[150px] animate-pulse mix-blend-multiply dark:mix-blend-normal" style={{ animationDuration: '10s', animationDelay: '1s' }} />
                 </div>
 
-                {/* 欢迎标题 */}
                 <div className="text-center mb-4 sm:mb-16 relative z-10 max-w-2xl mx-auto shrink-0">
                     <div className="mb-4 inline-flex items-center justify-center">
                         <div className="relative">
@@ -141,16 +157,13 @@ export function ChatList({
                     </p>
                 </div>
 
-                {/* 🔧 调试区域 */}
                 {process.env.NODE_ENV === 'development' && DEBUG_UI && (
                     <div className="w-full max-w-lg mb-8 p-4 border border-dashed border-muted-foreground/30 rounded-lg">
                         <p className="text-xs text-muted-foreground mb-3 text-center">🔧 调试预览 - 生产环境自动移除</p>
                     </div>
                 )}
 
-                {/* 内容区域 */}
                 <div className="flex-1 w-full flex items-center justify-center relative z-10">
-                    {/* 彩蛋模式：显示怪兽 */}
                     {isEasterEgg ? (
                         <div className="flex flex-col items-center animate-in fade-in zoom-in duration-500 -mt-16">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -162,14 +175,13 @@ export function ChatList({
                                 onClick={handleMonsterClick}
                             />
                             <button
-                                className="mt-8 text-lg font-semibold text-primary/80 hover:text-primary underline decoration-dashed decoration-2 decoration-primary/30 underline-offset-8 transition-colors cursor-pointer "
+                                className="mt-8 text-lg font-semibold text-primary/80 hover:text-primary underline decoration-dashed decoration-2 decoration-primary/30 underline-offset-8 transition-colors cursor-pointer"
                                 onClick={() => onSuggestionClick?.('What is Bucter?')}
                             >
                                 What is Bucter?
                             </button>
                         </div>
                     ) : (
-                        /* 建议卡片网格 */
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-3xl px-4">
                             {currentSuggestions.map((suggestion, idx) => (
                                 <SuggestionButton
@@ -186,33 +198,61 @@ export function ChatList({
         );
     }
 
+    // 虚拟列表渲染
+    const virtualItems = virtualizer.getVirtualItems();
+
     return (
         <div ref={containerRef} className="flex-1 overflow-y-auto px-4 custom-scrollbar relative">
-            {/* endRef 绑定到内容 div，ResizeObserver 监听其高度变化 */}
-            <div ref={endRef} className="max-w-3xl mx-auto py-6 space-y-6">
-                {/* 渲染所有消息 */}
-                {messages.map((message, idx) => {
-                    const isLastAssistant = idx === messages.length - 1 && message.role === 'assistant';
+            {/* endRef 放在总高度容器上 → 高度变化触发 ResizeObserver → maybeAutoScroll */}
+            <div
+                ref={endRef}
+                className="max-w-3xl mx-auto relative"
+                style={{ height: virtualizer.getTotalSize() }}
+            >
+                {virtualItems.map((virtualRow) => {
+                    const index = virtualRow.index;
+
+                    // 骨架屏
+                    if (showSkeleton && index === totalCount - 1) {
+                        return (
+                            <div
+                                key="skeleton"
+                                ref={virtualizer.measureElement}
+                                data-index={index}
+                                className="absolute top-0 left-0 w-full py-3"
+                                style={{ transform: `translateY(${virtualRow.start}px)` }}
+                            >
+                                <LoadingSkeleton />
+                            </div>
+                        );
+                    }
+
+                    const message = messages[index];
+                    if (!message) return null;
+
+                    const isLastAssistant = index === messages.length - 1 && message.role === 'assistant';
                     return (
-                        <MessageBubble
-                            key={message.id || idx}
-                            message={message}
-                            isStreaming={isLoading && isLastAssistant}
-                            phase={isLastAssistant ? phase : 'idle'}
-                            hasResults={isLastAssistant ? hasResults : true}
-                            isChat={isLastAssistant ? isChat : false}
-                            onCitationClick={onCitationClick}
-                        />
+                        <div
+                            key={message.id || index}
+                            ref={virtualizer.measureElement}
+                            data-index={index}
+                            className="absolute top-0 left-0 w-full py-3"
+                            style={{ transform: `translateY(${virtualRow.start}px)` }}
+                        >
+                            <MessageBubble
+                                message={message}
+                                isStreaming={isLoading && isLastAssistant}
+                                phase={isLastAssistant ? phase : 'idle'}
+                                hasResults={isLastAssistant ? hasResults : true}
+                                isChat={isLastAssistant ? isChat : false}
+                                onCitationClick={onCitationClick}
+                            />
+                        </div>
                     );
                 })}
-
-                {/* 加载中骨架屏 */}
-                {isLoading && messages[messages.length - 1]?.role === 'user' && (
-                    <LoadingSkeleton />
-                )}
             </div>
 
-            {/* 新消息浮动按钮 - 生成中或有未读消息时显示 */}
+            {/* 新消息浮动按钮 */}
             {(isLoading || hasUnread) && !isAtBottom && (
                 <div className="sticky bottom-4 w-full flex justify-center pointer-events-none">
                     <button

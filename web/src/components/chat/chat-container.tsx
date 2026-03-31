@@ -14,7 +14,7 @@ export function ChatContainer({ children, citation, onCloseCitation }: ChatConta
         <div className="flex-1 flex overflow-hidden min-h-0">
             {/* 主聊天区域 */}
             <div
-                className="flex-1 flex flex-col transition-all duration-300 ease-out overflow-hidden"
+                className="flex-1 flex flex-col overflow-hidden"
             >
                 {children}
             </div>
