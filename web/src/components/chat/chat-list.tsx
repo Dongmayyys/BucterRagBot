@@ -61,14 +61,15 @@ export function ChatList({
         overscan: 10,
     });
 
-    // 首次挂载时滚到底部（virtualizer 默认从顶部开始）
+    // 首次挂载时滚到底部（用 virtualizer API，比手动 scrollTop 更准确）
     const initialScrollDone = useRef(false);
     useLayoutEffect(() => {
-        if (!initialScrollDone.current && messages.length > 0 && containerRef.current) {
-            containerRef.current.scrollTop = containerRef.current.scrollHeight;
+        if (!initialScrollDone.current && totalCount > 0) {
+            virtualizer.scrollToIndex(totalCount - 1, { align: 'end' });
             initialScrollDone.current = true;
         }
-    }, [messages.length, containerRef]);
+    }, [totalCount, virtualizer]);
+
 
     // streaming 开始/结束的事件驱动
     const prevLoadingRef = useRef(isLoading);
