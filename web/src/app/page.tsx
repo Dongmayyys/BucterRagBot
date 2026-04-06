@@ -1,251 +1,75 @@
 'use client';
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import { ChatHeader } from '@/components/chat/chat-header';
 import { ChatContainer } from '@/components/chat/chat-container';
 import { MobileSourceSheet } from '@/components/chat/mobile-source-sheet';
 import { CreditsDialog } from '@/components/chat/credits-dialog';
 import { ChatList } from '@/components/chat/chat-list';
 import { ChatInput } from '@/components/chat/chat-input';
-import { ChatMessage, Citation } from '@/lib/types';
-import { ProcessingPhase } from '@/components/chat/processing-steps';
+import { Citation } from '@/lib/types';
 import { useVisualViewport } from '@/hooks/use-visual-viewport';
-import { useStreamBuffer } from '@/hooks/use-stream-buffer';
+import { useChat } from '@/hooks/use-chat';
 
 /**
- * 主页面 - 聊天界面
- * 
- * 数据流（四阶段）：
- * 1. 用户输入 → thinking（意图分类）
- * 2. 如果是 query → searching → organizing → generating
- * 3. 如果是 chat → 跳过 searching/organizing → generating
- * 4. 完成 → done
+ * 主页面 — 纯编排层
+ *
+ * 职责：
+ *   - 组合 hooks（useChat + useVisualViewport）
+ *   - 管理纯 UI 状态（彩蛋、致谢弹窗）
+ *   - 渲染 JSX
+ *
+ * 不负责：
+ *   - 流式请求控制、协议解析、缓冲调度（→ useChat）
+ *   - 视口高度管理（→ useVisualViewport）
  */
-
-// 分隔符常量
-const STREAM_SEPARATOR = '---STREAM_START---';
-
 export default function ChatPage() {
-  // ⚠️ 临时：生成 500 条假消息体验卡顿（测试完删掉）
-  const [messages, setMessages] = useState<ChatMessage[]>(() => {
-    const mock: ChatMessage[] = [];
-    for (let i = 0; i < 500; i++) {
-      mock.push({
-        id: `user-${i}`,
-        role: 'user',
-        content: `这是第 ${i + 1} 条用户消息，包含一些额外文字来增加 DOM 复杂度。用户可能会输入很长的问题，比如关于技术架构、性能优化、代码实现等方面的详细描述。`,
-      });
-      mock.push({
-        id: `assistant-${i}`,
-        role: 'assistant',
-        content: `## 回复 #${i + 1}\n\n这是一段较长的 AI 回复，包含多种 Markdown 元素：\n\n### 代码示例\n\n\`\`\`javascript\nfunction fibonacci(n) {\n  if (n <= 1) return n;\n  return fibonacci(n - 1) + fibonacci(n - 2);\n}\nconsole.log(fibonacci(10));\n\`\`\`\n\n### 表格\n\n| 方案 | 优点 | 缺点 |\n|------|------|------|\n| 方案 A | 简单 | 性能差 |\n| 方案 B | 高效 | 复杂 |\n| 方案 C | 均衡 | 需权衡 |\n\n### 列表\n\n- 第一点：这是一个比较长的列表项\n- 第二点：包含 \`内联代码\` 和 **加粗文本**\n- 第三点：还有 [链接](https://example.com)\n\n> 引用：性能优化需要数据驱动，不是想象驱动。`,
-      });
-    }
-    return mock;
-  });
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);  // 引用详情面板
-  const [selectedCitation, setSelectedCitation] = useState<Citation | null>(null);
-  // 致谢弹窗
-  const [showCredits, setShowCredits] = useState(false);
-  const [phase, setPhase] = useState<ProcessingPhase>('idle');
-  const [hasResults, setHasResults] = useState(true);
-  const [isChat, setIsChat] = useState(false); // 是否为闲聊模式
+  // ————————————————————————————————————————————
+  // Hooks
+  // ————————————————————————————————————————————
 
-  // 彩蛋状态（控制输入框显隐）
-  const [isEasterEgg, setIsEasterEgg] = useState(false);
+  const {
+    messages,
+    isLoading,
+    error,
+    phase,
+    isChat,
+    hasResults,
+    selectedCitation,
+    setSelectedCitation,
+    send,
+    stop,
+    clear,
+  } = useChat();
 
-  // 可视视口高度（解决键盘覆盖问题）
+  // 可视视口高度（解决移动端键盘覆盖问题）
   useVisualViewport();
 
-  // 用于终止请求的 AbortController
-  const abortControllerRef = useRef<AbortController | null>(null);
+  // ————————————————————————————————————————————
+  // 纯 UI 状态（不属于对话逻辑，留在编排层）
+  // ————————————————————————————————————————————
 
-  // 流式渲染缓冲区（rAF 节流，避免逐 chunk setState）
-  const { start: startBuffer, push: pushToBuffer, flushAll, reset: resetBuffer } = useStreamBuffer();
+  const [isEasterEgg, setIsEasterEgg] = useState(false);
+  const [showCredits, setShowCredits] = useState(false);
 
-  /**
-   * 核心发送逻辑
-   */
-  const sendMessage = useCallback(async (content: string) => {
-    // 发送消息时退出彩蛋模式
+  // ————————————————————————————————————————————
+  // 编排方法
+  // ————————————————————————————————————————————
+
+  /** 发送消息：退出彩蛋模式 + 委托 useChat */
+  const handleSend = useCallback((content: string) => {
     setIsEasterEgg(false);
+    send(content);
+  }, [send]);
 
-    if (!content.trim() || isLoading) return;
-
-    setError(null);
-    setIsLoading(true);
-    setPhase('thinking'); // ★ 阶段 1：思考（意图分类）
-    setIsChat(false);
-    setHasResults(true);
-
-    // 创建新的 AbortController
-    abortControllerRef.current = new AbortController();
-
-    // 1. 添加用户消息
-    const userMessage: ChatMessage = {
-      id: `user-${Date.now()}`,
-      role: 'user',
-      content: content.trim(),
-    };
-    setMessages(prev => [...prev, userMessage]);
-
-    // 2. 添加空的 assistant 消息（用于流式填充）
-    const assistantId = `assistant-${Date.now()}`;
-    setMessages(prev => [...prev, { id: assistantId, role: 'assistant', content: '' }]);
-
-    try {
-      // 3. 构建请求体
-      const uiMessages = [...messages, userMessage].map(msg => ({
-        id: msg.id,
-        role: msg.role,
-        parts: [{ type: 'text', text: msg.content }],
-      }));
-
-      // 4. 发送请求
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: uiMessages }),
-        signal: abortControllerRef.current.signal,
-      });
-
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status} ${response.statusText}`);
-      }
-
-      // 5. 读取流式响应
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error('No response body');
-
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let citations: Citation[] = [];
-      let streamStarted = false;
-      let intent: 'query' | 'chat' | 'error' = 'query';  // ★ 添加 error 类型
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-
-        // 6. 检测分隔符，提取 intent + citations
-        if (!streamStarted && buffer.includes(STREAM_SEPARATOR)) {
-          const [jsonPart, rest] = buffer.split(STREAM_SEPARATOR);
-
-          try {
-            const parsed = JSON.parse(jsonPart.trim());
-            intent = parsed.intent || 'query';
-            citations = parsed.citations || [];
-            console.log('[Frontend] Intent:', intent, 'Citations:', citations.length);
-
-            setIsChat(intent === 'chat');
-            setHasResults(citations.length > 0);
-
-            // ★ 根据意图设置阶段（简化：直接用 intent 判断）
-            if (intent === 'error') {
-              // 错误：所有步骤显示失败
-              setPhase('error');
-            } else if (intent === 'chat') {
-              // 闲聊：跳过查询和整理，直接进入生成
-              setPhase('generating');
-            } else if (citations.length === 0) {
-              // 无检索结果：跳过动画，直接 done
-              setPhase('done');
-            } else {
-              // 知识查询：显示查询阶段完成，进入整理
-              setPhase('searching');
-              // 使用函数式更新防止覆盖已完成/已错误的最终状态
-              setTimeout(() => setPhase(p => (p === 'done' || p === 'error' || p === 'idle') ? p : 'organizing'), 100);
-              setTimeout(() => setPhase(p => (p === 'done' || p === 'error' || p === 'idle') ? p : 'generating'), 200);
-            }
-          } catch (e) {
-            console.error('[Frontend] Failed to parse header:', e);
-            setHasResults(false);
-          }
-
-          buffer = rest?.trim() || '';
-          streamStarted = true;
-
-          // 注册缓冲区 flush 回调（此时 intent 和 citations 已确定，闭包捕获安全）
-          const msgCitations = intent === 'query' ? citations : undefined;
-          startBuffer((content) => {
-            setMessages(prev =>
-              prev.map(msg =>
-                msg.id === assistantId
-                  ? { ...msg, content, citations: msgCitations }
-                  : msg
-              )
-            );
-          });
-        }
-
-        // 7. 将内容写入缓冲区（由 rAF 节奏驱动渲染，不再逐 chunk setState）
-        if (streamStarted) {
-          pushToBuffer(buffer);
-        }
-      }
-
-      // 流正常结束：立即 flush 剩余缓冲区内容，确保最后几个字符不丢
-      flushAll();
-
-      // ★ 错误状态时保持 error phase，不覆盖
-      if (intent !== 'error') {
-        setPhase('done');
-      }
-    } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') {
-        console.log('[Frontend] Request aborted by user');
-        resetBuffer();  // 丢弃未 flush 的内容
-        setPhase('done');
-        return;
-      }
-
-      console.error('Chat error:', err);
-      resetBuffer();  // 丢弃未 flush 的内容
-      setError(err instanceof Error ? err.message : 'Unknown error');
-      setPhase('idle');
-      // 保留已有内容的消息（部分成功），只删空消息避免空气泡
-      setMessages(prev => prev.filter(msg =>
-        msg.id !== assistantId || msg.content.length > 0
-      ));
-    } finally {
-      setIsLoading(false);
-      abortControllerRef.current = null;
-    }
-  }, [isLoading, messages, startBuffer, pushToBuffer, flushAll, resetBuffer]);
-
-  /**
-   * 停止生成
-   */
-  const handleStop = useCallback(() => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-  }, []);
-
-  /**
-   * 清除对话历史
-   */
-  const handleClear = useCallback(() => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-    setMessages([]);
-    setSelectedCitation(null);
-    setError(null);
-    setIsLoading(false);
-    setPhase('idle');
-    setIsChat(false);
-  }, []);
-
-  /**
-   * 点击引用来源
-   */
+  /** 点击引用来源 */
   const handleCitationClick = useCallback((citation: Citation) => {
     setSelectedCitation(citation);
-  }, []);
+  }, [setSelectedCitation]);
+
+  // ————————————————————————————————————————————
+  // 渲染
+  // ————————————————————————————————————————————
 
   return (
     <div
@@ -254,7 +78,7 @@ export default function ChatPage() {
     >
       {/* 顶部标题栏 */}
       <ChatHeader
-        onNewChat={handleClear}
+        onNewChat={clear}
         hasMessages={messages.length > 0}
         onShowCredits={() => setShowCredits(true)}
       />
@@ -270,7 +94,7 @@ export default function ChatPage() {
           phase={phase}
           hasResults={hasResults}
           isChat={isChat}
-          onSuggestionClick={sendMessage}
+          onSuggestionClick={handleSend}
           onCitationClick={handleCitationClick}
           isEasterEgg={isEasterEgg}
           onEasterEggChange={setIsEasterEgg}
@@ -284,11 +108,11 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* 输入框组件 (彩蛋模式下隐藏) */}
+      {/* 输入框组件（彩蛋模式下隐藏） */}
       {!isEasterEgg && (
         <ChatInput
-          onSubmit={sendMessage}
-          onStop={handleStop}
+          onSubmit={handleSend}
+          onStop={stop}
           isLoading={isLoading}
         />
       )}
