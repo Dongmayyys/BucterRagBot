@@ -54,10 +54,11 @@
 bucter-rag-bot/
 ├── web/                          Next.js 前端 + API 层
 │   ├── src/app/
-│   │   ├── page.tsx              聊天主页面（流式读取 + 状态管理）
+│   │   ├── page.tsx              聊天主页面（编排层）
 │   │   └── api/chat/route.ts     RAG API（意图分类 → 检索 → 重排 → 生成）
 │   ├── src/components/chat/      聊天组件（消息列表、气泡、输入框、溯源面板）
 │   ├── src/hooks/                自定义 Hooks
+│   │   ├── use-chat.ts           对话逻辑（流式请求 + 协议解析 + 缓冲调度）
 │   │   ├── use-stream-buffer.ts  流式缓冲（双触发 flush）
 │   │   ├── use-scroll-to-bottom.ts 智能滚动（State + Ref 双轨制）
 │   │   └── use-visual-viewport.ts  移动端视口适配
